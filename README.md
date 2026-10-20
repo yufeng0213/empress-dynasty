@@ -8,7 +8,9 @@
 
 ## 为什么要有后端
 
-浏览器有同源策略，直接请求多数 LLM 接口会被 CORS 拦掉；同时把 API Key 放在前端也等于公开。因此所有模型请求都走 `/api/chat` 由服务器转发，密钥只存在服务器 `.env` 里。
+浏览器有同源策略，直接请求多数 LLM 接口会被 CORS 拦掉；同时把 API Key 放在前端也等于公开。因此所有模型请求都走 `/api/chat` 由服务器转发，密钥只存在服务器上。
+
+接口配置可以直接在网页「设置 · AI 接口」里维护：可以保存多套（地址 / 模型 / Key / 额外参数），随时切换启用哪一套，也可以单独测试连通性。配置落在服务器 `data/llm-profiles.json`，页面只拿到掩码，不会把密钥写进浏览器缓存。`.env` 里的配置会作为只读的「服务器环境变量」一并出现在列表里。
 
 存档同理，从 `localStorage` 改为服务端文件，换设备、清缓存都不会丢。
 
@@ -19,13 +21,15 @@
 ├─ src/
 │  ├─ game-core/empire/   # 游戏引擎（纯 JS，无框架依赖，从原项目原样迁移）
 │  ├─ game/llm.js         # 提示词与 AI 调用（只负责写文字，数值永远本地结算）
+│  ├─ game/llmConfig.js   # 前端 AI 配置客户端（只读写掩码，不接触密钥）
 │  ├─ storage/kv.js       # 存储层，接口与原 Android 版一致，内部改走服务端
-│  ├─ views/              # 王朝主界面、召见、京城、雷达图
+│  ├─ views/              # 王朝主界面、召见、京城、AI 设置、雷达图
 │  ├─ App.vue
 │  └─ main.js
 ├─ server/
-│  ├─ index.js            # 路由：静态资源 / api/kv / api/chat
+│  ├─ index.js            # 路由：静态资源 / api/kv / api/chat / api/llm
 │  ├─ llm.js              # LLM 代理
+│  ├─ llm-config.js       # 多套接口配置的存取与掩码
 │  └─ store.js            # 存档原子写
 ├─ Dockerfile
 ├─ docker-compose.yml
@@ -39,7 +43,7 @@
 
 ```bash
 npm install
-cp .env.example .env      # 填入 LLM_API_KEY
+cp .env.example .env      # 可留空，之后在网页「设置 · AI 接口」里配置
 npm run dev               # 前端 5173，接口 3001，/api 自动代理
 ```
 
@@ -59,7 +63,7 @@ npm start                 # 打开 http://localhost:3001
 ```bash
 git clone https://github.com/yufeng0213/empress-dynasty.git
 cd empress-dynasty
-cp .env.example .env && vi .env     # 至少填 LLM_API_KEY
+cp .env.example .env && vi .env     # 可留空，进游戏后在网页里配置 AI
 docker compose up -d --build
 ```
 
@@ -76,21 +80,37 @@ docker compose up -d --build
 | 变量 | 说明 |
 | --- | --- |
 | `LLM_API_BASE` | 完整接口地址；只填到 `/v1` 也行，会自动补 `/chat/completions` |
-| `LLM_API_KEY` | 接口密钥，只存在服务器 |
+| `LLM_API_KEY` | 接口密钥，只存在服务器；留空则改用网页里的配置 |
 | `LLM_MODEL` | 模型名 |
 | `LLM_EXTRA_PARAMS` | 可选，JSON 形式的额外参数，如 `{"top_p":0.95}` |
 | `PORT` | 容器内监听端口，默认 3001 |
-| `DATA_DIR` | 存档目录，容器内默认 `/data` |
+| `DATA_DIR` | 存档与 AI 配置目录，容器内默认 `/data` |
+
+### AI 接口配置
+
+两处都可以配置，二选一即可：
+
+1. **网页内（推荐）**：首页右上「AI 设置」，或游戏内「设置」。支持保存多套配置、随时切换、单独测试。
+2. **服务器 `.env`**：启动后作为只读的「服务器环境变量」配置出现，适合一台机器固定一个接口。
+
+网页内配置的规则：
+
+- 接口需兼容 OpenAI 的 `/chat/completions`；只填到 `/v1` 会自动补全。
+- 配置保存在 `data/llm-profiles.json`，接口只回传掩码（如 `sk-••••abcd`），密钥不会进入浏览器缓存。
+- 「测试连接」只发一条极短请求，验证地址、模型名与密钥。
+- 切换后立即生效，不需要重启服务。
+- 不配置也能玩：人设、奏报退回本地模板。
 
 ### 存档
 
-存档是普通 JSON，宿主机的 `./data/kv.json`。
+存档是普通 JSON，宿主机的 `./data/kv.json`；AI 配置是 `./data/llm-profiles.json`。
 
 ```bash
-cp data/kv.json ~/backup/kv-$(date +%F).json   # 备份
+cp data/kv.json ~/backup/kv-$(date +%F).json   # 备份存档
+cp data/llm-profiles.json ~/backup/llm-$(date +%F).json  # 备份接口配置（含密钥）
 ```
 
-换服务器时把 `data/` 整个拷过去即可。文件损坏会自动改名为 `kv.corrupt.<时间戳>.json` 并保留原文件。
+换服务器时把 `data/` 整个拷过去即可。文件损坏会自动改名为 `*.corrupt.<时间戳>.json` 并保留原文件。
 
 ### 建议：套一层 HTTPS
 
@@ -107,5 +127,5 @@ cp data/kv.json ~/backup/kv-$(date +%F).json   # 备份
 ## 说明
 
 - 所有数值（属性、忠诚、野心、结算结果）都在本地引擎里算，模型只负责写人设、奏报、对白，不会改动数值。
-- 没有配置 `LLM_API_KEY` 时游戏仍可玩，只是人物小传会使用本地模板兜底。
+- 没有配置 AI 接口时游戏仍可玩，只是人物小传、奏报会使用本地模板兜底；配好之后在「设置」里一键切换即可。
 - 头像按 `/data/dynasty/avatars/...` 查找，当前仓库未内置图库，找不到时显示姓氏首字。

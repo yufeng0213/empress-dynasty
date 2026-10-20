@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   appendChatTurn,
   askChatFree,
@@ -30,6 +30,7 @@ const contactOpen = ref(false)
 const filter = ref('全部')
 const draft = ref('')
 const workingRun = ref(props.run)
+const feedRef = ref(null)
 
 watch(() => props.run, (next) => {
   if (next) workingRun.value = next
@@ -47,21 +48,32 @@ const activeMemory = computed(() => (
   active.value ? workingRun.value.chatMemory?.[active.value.id] || null : null
 ))
 
+const FILTERS = [
+  { label: '全部', role: '' },
+  { label: '朝臣', role: 'minister' },
+  { label: '宗室', role: 'clan' },
+  { label: '后宫', role: 'consort' },
+  { label: '内侍', role: 'servant' },
+  { label: '子嗣', role: 'child' },
+]
+
 const filteredContacts = computed(() => {
-  if (filter.value === '全部') return contacts.value
-  const map = {
-    朝臣: 'minister',
-    宗室: 'clan',
-    后宫: 'consort',
-    内侍: 'servant',
-    子嗣: 'child',
-  }
-  return contacts.value.filter((item) => item.role === map[filter.value])
+  const item = FILTERS.find((entry) => entry.label === filter.value)
+  if (!item?.role) return contacts.value
+  return contacts.value.filter((contact) => contact.role === item.role)
 })
 
-const roleClass = (contact) => (
-  contact?.role === 'consort' ? 'is-consort' : (contact?.role === 'servant' ? 'is-inner' : '')
-)
+const roleClass = (contact) => {
+  if (contact?.role === 'consort') return 'avatar-consort'
+  if (contact?.role === 'servant') return 'avatar-inner'
+  return ''
+}
+
+const MODE_LABELS = {
+  chat: '闲谈',
+  audience: '御前奏对',
+  letter: '密折',
+}
 
 const greetingFor = (role) => ({
   minister: '臣叩见陛下。',
@@ -113,6 +125,13 @@ const formatEffects = (effects = {}) => {
   return parts.length ? parts.join(' · ') : '关系略有变化'
 }
 
+const scrollFeed = () => {
+  nextTick(() => {
+    const node = feedRef.value
+    if (node) node.scrollTop = node.scrollHeight
+  })
+}
+
 const selectContact = (id, nextMode = 'chat') => {
   if (!id || busy.value) return
   const result = startChatSession(workingRun.value, id)
@@ -131,11 +150,13 @@ const selectContact = (id, nextMode = 'chat') => {
   error.value = ''
   lastEffect.value = ''
   draft.value = ''
+  scrollFeed()
 }
 
 const appendTo = (contactId, from, text) => {
   if (!messages.value[contactId]) messages.value[contactId] = []
   messages.value[contactId].push({ from, text, time: '此刻' })
+  scrollFeed()
 }
 
 const ask = async (kind, value, label = value) => {
@@ -218,125 +239,131 @@ onMounted(() => {
 
 <template>
   <div class="chat-screen">
-    <!-- 联系人列表 A -->
-    <template v-if="mode === 'list'">
-      <header class="chat-list-head">
-        <div>
-          <h2>召见</h2>
-          <p>{{ contacts.length }} 人可召 · 行动点 {{ run.actionPoints ?? 0 }}</p>
+    <!-- ===== 名单 ===== -->
+    <template v-if="mode === 'list' || mode === 'duty'">
+      <header class="chat-head">
+        <button type="button" class="icon-btn" aria-label="返回" @click="emit('back')">‹</button>
+        <div class="chat-head-main">
+          <h1>{{ mode === 'duty' ? '值房' : '召见' }}</h1>
+          <p>
+            {{ mode === 'duty' ? '今日当值的人' : `${contacts.length} 人可召` }}
+            · 行动点 {{ run.actionPoints ?? 0 }}
+          </p>
         </div>
-        <button type="button" class="chat-ghost" @click="mode = 'duty'">值房</button>
+        <button
+          type="button"
+          class="btn btn-sm btn-ghost"
+          @click="mode = mode === 'duty' ? 'list' : 'duty'"
+        >{{ mode === 'duty' ? '名单' : '值房' }}</button>
       </header>
 
-      <div class="chat-filters">
+      <div v-if="mode === 'list'" class="chat-filters">
         <button
-          v-for="item in ['全部', '朝臣', '宗室', '后宫', '内侍', '子嗣']"
-          :key="item"
+          v-for="item in FILTERS"
+          :key="item.label"
           type="button"
-          :class="{ 'is-active': filter === item }"
-          @click="filter = item"
-        >{{ item }}</button>
+          class="chat-filter"
+          :class="{ 'is-active': filter === item.label }"
+          @click="filter = item.label"
+        >{{ item.label }}</button>
       </div>
 
-      <div class="chat-scroll">
-        <button
-          v-for="contact in filteredContacts"
-          :key="contact.id"
-          type="button"
-          class="chat-contact"
-          @click="selectContact(contact.id, 'chat')"
-        >
-          <div class="chat-avatar" :class="roleClass(contact)">{{ contact.name.slice(0, 1) }}</div>
-          <div class="chat-contact-main">
-            <div class="chat-contact-name">
-              {{ contact.name }}
-              <span class="chat-tag">{{ contact.roleLabel }}</span>
+      <div class="chat-scroll" :class="{ 'is-grid': mode === 'duty' }">
+        <template v-if="mode === 'list'">
+          <button
+            v-for="contact in filteredContacts"
+            :key="contact.id"
+            type="button"
+            class="contact"
+            @click="selectContact(contact.id, 'chat')"
+          >
+            <div class="avatar avatar-sm" :class="roleClass(contact)">{{ contact.name.slice(0, 1) }}</div>
+            <div class="contact-main">
+              <div class="contact-name">
+                {{ contact.name }}
+                <span class="chip">{{ contact.roleLabel }}</span>
+              </div>
+              <div class="contact-meta">{{ contact.office }} · {{ contact.attitude }} · 忠 {{ contact.loyalty }}</div>
+              <div class="contact-preview">{{ memoryPreview(contact) }}</div>
             </div>
-            <div class="chat-contact-sub">{{ contact.office }} · {{ contact.attitude }} · 忠 {{ contact.loyalty }}</div>
-            <div class="chat-contact-preview">{{ memoryPreview(contact) }}</div>
-          </div>
-        </button>
-        <p v-if="error" class="chat-error">{{ error }}</p>
-        <p v-if="!filteredContacts.length" class="chat-empty">这一类暂时没有人。</p>
-      </div>
-    </template>
+            <span class="contact-go">›</span>
+          </button>
+          <p v-if="!filteredContacts.length" class="empty">这一类暂时没有人。</p>
+        </template>
 
-    <!-- 值房 D -->
-    <template v-else-if="mode === 'duty'">
-      <header class="chat-list-head">
-        <div>
-          <h2>值房</h2>
-          <p>今日谁在 · 行动点 {{ run.actionPoints ?? 0 }}</p>
-        </div>
-        <button type="button" class="chat-ghost" @click="mode = 'list'">名单</button>
-      </header>
-      <div class="chat-scroll">
-        <div class="chat-duty-grid">
+        <template v-else>
           <button
             v-for="contact in contacts"
             :key="contact.id"
             type="button"
-            class="chat-duty-card"
+            class="duty-card"
             @click="selectContact(contact.id, 'chat')"
           >
-            <div class="chat-duty-head">
-              <div class="chat-avatar" :class="roleClass(contact)">{{ contact.name.slice(0, 1) }}</div>
+            <div class="duty-head">
+              <div class="avatar avatar-sm" :class="roleClass(contact)">{{ contact.name.slice(0, 1) }}</div>
               <div>
-                <div class="chat-contact-name">{{ contact.name }}</div>
-                <div class="chat-contact-sub">{{ contact.office }}</div>
+                <div class="contact-name">{{ contact.name }}</div>
+                <div class="contact-meta">{{ contact.office }}</div>
               </div>
             </div>
-            <div class="chat-duty-meta">{{ contact.attitude }} · 忠 {{ contact.loyalty }} · 野 {{ contact.ambition }}</div>
+            <div class="duty-meta">{{ contact.attitude }} · 忠 {{ contact.loyalty }} · 野 {{ contact.ambition }}</div>
           </button>
-        </div>
-        <p v-if="error" class="chat-error">{{ error }}</p>
+          <p v-if="!contacts.length" class="empty">今日无人当值。</p>
+        </template>
+
+        <p v-if="error" class="chat-alert">{{ error }}</p>
       </div>
     </template>
 
-    <!-- 聊天 / 奏对 / 密折 -->
+    <!-- ===== 对话 ===== -->
     <template v-else-if="active">
-      <header class="chat-top">
-        <button type="button" class="chat-icon" @click="back">‹</button>
-        <div class="chat-avatar" :class="roleClass(active)">{{ active.name.slice(0, 1) }}</div>
-        <div class="chat-top-main">
-          <div class="chat-name">{{ active.name }}</div>
-          <div class="chat-sub">{{ active.office }} · {{ active.attitude }}</div>
+      <header class="chat-head">
+        <button type="button" class="icon-btn" aria-label="返回" @click="back">‹</button>
+        <div class="avatar avatar-sm" :class="roleClass(active)">{{ active.name.slice(0, 1) }}</div>
+        <div class="chat-head-main">
+          <h1>{{ active.name }}</h1>
+          <p>{{ active.office }} · {{ active.attitude }} · {{ MODE_LABELS[mode] }}</p>
         </div>
-        <button type="button" class="chat-icon" @click="detailOpen = true">⋯</button>
+        <button type="button" class="icon-btn" aria-label="详情" @click="detailOpen = true">⋯</button>
       </header>
 
-      <div class="chat-mode-row">
-        <button type="button" :class="{ 'is-active': mode === 'chat' }" @click="switchMode('chat')">聊天</button>
+      <div class="chat-modes">
+        <button type="button" :class="{ 'is-active': mode === 'chat' }" @click="switchMode('chat')">闲谈</button>
         <button type="button" :class="{ 'is-active': mode === 'audience' }" @click="switchMode('audience')">御前奏对</button>
         <button type="button" :class="{ 'is-active': mode === 'letter' }" @click="switchMode('letter')">密折</button>
-        <button type="button" @click="contactOpen = true">换人</button>
+        <button type="button" class="chat-switch" @click="contactOpen = true">换人</button>
       </div>
 
-      <div v-if="mode === 'letter'" class="chat-letter">
-        <div class="chat-letter-title">与{{ active.name }}书</div>
-        <div class="chat-letter-meta">{{ active.office }} · {{ active.factionName || active.roleLabel }} · 亲启</div>
-        <div v-for="(msg, index) in currentMessages" :key="index" class="chat-letter-line" :class="{ 'is-me': msg.from === 'me' }">
-          {{ msg.from === 'me' ? '朱批：' : '' }}{{ msg.text }}
-        </div>
-        <div class="chat-seal">御览</div>
-      </div>
-
-      <div v-else class="chat-feed" :class="{ 'is-audience': mode === 'audience' }">
+      <div v-if="mode === 'letter'" class="letter">
+        <div class="letter-title">与{{ active.name }}书</div>
+        <div class="letter-meta">{{ active.office }} · {{ active.factionName || active.roleLabel }} · 亲启</div>
         <div
           v-for="(msg, index) in currentMessages"
           :key="index"
-          class="chat-msg"
+          class="letter-line"
           :class="{ 'is-me': msg.from === 'me' }"
         >
-          <div class="chat-avatar small" :class="roleClass(active)">
+          {{ msg.from === 'me' ? '朱批：' : '' }}{{ msg.text }}
+        </div>
+        <div class="letter-seal">御览</div>
+      </div>
+
+      <div v-else ref="feedRef" class="chat-feed" :class="{ 'is-audience': mode === 'audience' }">
+        <div
+          v-for="(msg, index) in currentMessages"
+          :key="index"
+          class="msg"
+          :class="{ 'is-me': msg.from === 'me' }"
+        >
+          <div class="avatar avatar-sm" :class="roleClass(active)">
             {{ msg.from === 'me' ? '帝' : active.name.slice(0, 1) }}
           </div>
-          <div>
-            <div class="chat-bubble">{{ msg.text }}</div>
+          <div class="msg-body">
+            <div class="bubble">{{ msg.text }}</div>
             <small>{{ msg.from === 'me' ? '你' : active.name }} · {{ msg.time }}</small>
           </div>
         </div>
-        <div v-if="busy" class="chat-typing">对方正在斟酌……</div>
+        <div v-if="busy" class="typing">对方正在斟酌……</div>
       </div>
 
       <div class="chat-topics">
@@ -351,9 +378,9 @@ onMounted(() => {
       </div>
 
       <p v-if="lastEffect" class="chat-effect">{{ lastEffect }}</p>
-      <p v-if="error" class="chat-error">{{ error }}</p>
+      <p v-if="error" class="chat-alert">{{ error }}</p>
 
-      <div class="chat-composer">
+      <div class="composer">
         <input
           v-model="draft"
           type="text"
@@ -361,61 +388,63 @@ onMounted(() => {
           :disabled="busy"
           @keydown.enter.prevent="sendDraft"
         />
-        <button type="button" class="chat-send" :disabled="busy" @click="sendDraft">发送</button>
+        <button type="button" class="btn btn-primary" :disabled="busy || !draft.trim()" @click="sendDraft">发送</button>
       </div>
     </template>
 
-    <!-- 关系抽屉 -->
-    <div v-if="detailOpen && active" class="chat-mask" @click.self="detailOpen = false">
-      <div class="chat-sheet">
-        <div class="chat-sheet-head">
+    <!-- ===== 关系抽屉 ===== -->
+    <div v-if="detailOpen && active" class="mask" @click.self="detailOpen = false">
+      <div class="sheet">
+        <div class="sheet-head">
           <h3>{{ active.name }}</h3>
-          <button type="button" class="chat-icon" @click="detailOpen = false">×</button>
+          <button type="button" class="icon-btn" @click="detailOpen = false">×</button>
         </div>
-        <div class="chat-person">
-          <div class="chat-avatar" :class="roleClass(active)">{{ active.name.slice(0, 1) }}</div>
+        <div class="detail-person">
+          <div class="avatar" :class="roleClass(active)">{{ active.name.slice(0, 1) }}</div>
           <div>
-            <div class="chat-contact-name">{{ active.office }} · {{ active.factionName || active.roleLabel }}</div>
-            <div class="chat-contact-sub">{{ active.attitude }}</div>
+            <div class="contact-name">{{ active.office }} · {{ active.factionName || active.roleLabel }}</div>
+            <div class="contact-meta">{{ active.attitude }}</div>
           </div>
         </div>
-        <div class="chat-kv"><span>忠诚</span><b>{{ active.loyalty }}</b></div>
-        <div class="chat-meter"><i :style="{ width: `${active.loyalty}%` }"></i></div>
-        <div class="chat-kv"><span>野心</span><b>{{ active.ambition }}</b></div>
-        <div class="chat-meter"><i :style="{ width: `${active.ambition}%`, background: 'var(--dyn-red)' }"></i></div>
-        <div class="chat-kv"><span>把柄</span><b>{{ active.note }}</b></div>
-        <div class="chat-kv"><span>召见</span><b>{{ activeMemory?.chats || 0 }} 次</b></div>
-        <div class="chat-kv">
+        <div class="kv"><span>忠诚</span><b>{{ active.loyalty }}</b></div>
+        <div class="bar bar-jade"><i :style="{ width: `${active.loyalty}%` }"></i></div>
+        <div class="kv detail-kv"><span>野心</span><b>{{ active.ambition }}</b></div>
+        <div class="bar bar-red"><i :style="{ width: `${active.ambition}%` }"></i></div>
+        <div class="kv detail-kv"><span>把柄</span><b>{{ active.note }}</b></div>
+        <div class="kv"><span>召见</span><b>{{ activeMemory?.chats || 0 }} 次</b></div>
+        <div class="kv">
           <span>上次话题</span>
           <b>{{ activeMemory?.lastTopic ? (topics.find((item) => item.id === activeMemory.lastTopic)?.label || activeMemory.lastTopic) : '无' }}</b>
         </div>
-        <div class="chat-effect-box">
-          <div class="chat-contact-sub">本轮预计</div>
+        <div class="effect-box">
+          <span>本轮结果</span>
           {{ lastEffect || '尚未开口。' }}
         </div>
       </div>
     </div>
 
-    <!-- 换人抽屉 -->
-    <div v-if="contactOpen" class="chat-mask" @click.self="contactOpen = false">
-      <div class="chat-sheet">
-        <div class="chat-sheet-head">
+    <!-- ===== 换人抽屉 ===== -->
+    <div v-if="contactOpen" class="mask" @click.self="contactOpen = false">
+      <div class="sheet">
+        <div class="sheet-head">
           <h3>换一个人</h3>
-          <button type="button" class="chat-icon" @click="contactOpen = false">×</button>
+          <button type="button" class="icon-btn" @click="contactOpen = false">×</button>
         </div>
-        <button
-          v-for="contact in contacts"
-          :key="contact.id"
-          type="button"
-          class="chat-contact"
-          @click="selectContact(contact.id, mode === 'letter' ? 'letter' : (mode === 'audience' ? 'audience' : 'chat'))"
-        >
-          <div class="chat-avatar" :class="roleClass(contact)">{{ contact.name.slice(0, 1) }}</div>
-          <div class="chat-contact-main">
-            <div class="chat-contact-name">{{ contact.name }}</div>
-            <div class="chat-contact-sub">{{ contact.office }} · {{ contact.attitude }}</div>
-          </div>
-        </button>
+        <div class="sheet-contacts">
+          <button
+            v-for="contact in contacts"
+            :key="contact.id"
+            type="button"
+            class="contact"
+            @click="selectContact(contact.id, mode === 'letter' ? 'letter' : (mode === 'audience' ? 'audience' : 'chat'))"
+          >
+            <div class="avatar avatar-sm" :class="roleClass(contact)">{{ contact.name.slice(0, 1) }}</div>
+            <div class="contact-main">
+              <div class="contact-name">{{ contact.name }}</div>
+              <div class="contact-meta">{{ contact.office }} · {{ contact.attitude }}</div>
+            </div>
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -426,535 +455,568 @@ onMounted(() => {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  width: 100%;
-  max-width: 100vw;
-  padding-top: env(safe-area-inset-top);
   display: flex;
   flex-direction: column;
+  padding-top: var(--safe-top);
   background:
-    radial-gradient(circle at 50% 0%, rgba(201, 162, 39, 0.05), transparent 32%),
-    var(--dyn-ink);
+    radial-gradient(circle at 50% 0, rgba(201, 162, 39, 0.05), transparent 34%),
+    var(--ink);
   overflow: hidden;
 }
 
-.chat-list-head {
-  flex-shrink: 0;
+.chat-head {
+  flex: 0 0 auto;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 13px 8px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(12, 10, 8, 0.9);
 }
 
-.chat-list-head h2 {
+.chat-head-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-head-main h1 {
   margin: 0;
-  font-family: var(--font-heading, serif);
-  font-size: 1.1rem;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
   font-weight: 500;
-  letter-spacing: 0.1em;
-  color: var(--dyn-gold-bright);
+  letter-spacing: 0.16em;
+  color: var(--gold-bright);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.chat-list-head p {
+.chat-head-main p {
   margin: 2px 0 0;
-  font-size: 0.56rem;
-  color: var(--dyn-dim);
-}
-
-.chat-ghost {
-  padding: 5px 8px;
-  border: 1px solid var(--dyn-line);
-  background: transparent;
-  color: var(--dyn-muted);
-  font-family: inherit;
-  font-size: 0.56rem;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chat-filters {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   display: flex;
-  gap: 4px;
+  gap: 5px;
+  padding: 10px 12px;
   overflow-x: auto;
-  padding: 0 11px 8px;
   scrollbar-width: none;
 }
 
-.chat-filters::-webkit-scrollbar { display: none; }
-
-.chat-filters button {
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  border: 1px solid var(--dyn-line-soft);
-  background: transparent;
-  color: var(--dyn-muted);
-  font-family: inherit;
-  font-size: 0.56rem;
+.chat-filters::-webkit-scrollbar {
+  display: none;
 }
 
-.chat-filters button.is-active {
-  border-color: var(--dyn-gold);
-  color: var(--dyn-gold-bright);
+.chat-filter {
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+}
+
+.chat-filter.is-active {
+  border-color: var(--gold-line);
+  background: rgba(201, 162, 39, 0.1);
+  color: var(--gold-bright);
 }
 
 .chat-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  padding: 0 12px 24px;
 }
 
-.chat-contact {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 10px 13px;
-  border: none;
-  border-bottom: 1px solid var(--dyn-line-soft);
-  background: transparent;
-  color: var(--dyn-muted);
-  text-align: left;
-}
-
-.chat-contact:active { background: rgba(201, 162, 39, 0.07); }
-
-.chat-avatar {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--dyn-line);
-  background: radial-gradient(circle at 35% 30%, #3a2d1c, #171310 70%);
-  color: var(--dyn-gold-bright);
-  font-size: 1rem;
-}
-
-.chat-avatar.is-consort { border-color: rgba(139, 123, 176, 0.65); }
-.chat-avatar.is-inner { border-color: rgba(111, 157, 146, 0.65); }
-.chat-avatar.small { width: 28px; height: 28px; font-size: 0.68rem; }
-
-.chat-contact-main { flex: 1; min-width: 0; }
-.chat-contact-name { font-size: 0.74rem; color: var(--dyn-text); }
-.chat-contact-sub { margin-top: 1px; font-size: 0.54rem; color: var(--dyn-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chat-contact-preview { margin-top: 2px; font-size: 0.56rem; color: var(--dyn-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.chat-tag {
-  margin-left: 4px;
-  padding: 0 4px;
-  border: 1px solid var(--dyn-line);
-  color: var(--dyn-muted);
-  font-size: 0.48rem;
-}
-
-.chat-duty-grid {
+.chat-scroll.is-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  padding: 10px 11px;
+  align-content: start;
+  gap: 8px;
 }
 
-.chat-duty-card {
-  padding: 9px;
-  border: 1px solid var(--dyn-line-soft);
-  background: var(--dyn-panel);
-  color: var(--dyn-muted);
+.contact {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 11px 4px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
   text-align: left;
 }
 
-.chat-duty-card:active { border-color: var(--dyn-gold); }
-.chat-duty-head { display: flex; align-items: center; gap: 7px; }
-.chat-duty-head .chat-avatar { width: 32px; height: 32px; font-size: 0.75rem; }
-.chat-duty-meta { margin-top: 5px; font-size: 0.52rem; color: var(--dyn-dim); line-height: 1.5; }
+.contact:hover {
+  background: rgba(201, 162, 39, 0.04);
+}
 
-.chat-top {
-  flex-shrink: 0;
+.contact-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-name {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--dyn-line-soft);
-  background: rgba(20, 17, 14, 0.96);
+  gap: 6px;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
 }
 
-.chat-icon {
-  width: 40px;
-  height: 40px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--dyn-line-soft);
-  background: transparent;
-  color: var(--dyn-muted);
-  font-size: 1rem;
-  line-height: 1;
+.contact-meta {
+  margin-top: 1px;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.chat-top-main { flex: 1; min-width: 0; }
-.chat-name { font-size: 0.74rem; color: var(--dyn-text); }
-.chat-sub { margin-top: 1px; font-size: 0.52rem; color: var(--dyn-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contact-preview {
+  margin-top: 3px;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-.chat-mode-row {
-  flex-shrink: 0;
+.contact-go {
+  color: var(--dim);
+  font-size: 1.05rem;
+}
+
+.duty-card {
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+}
+
+.duty-card:hover {
+  border-color: var(--gold-line);
+}
+
+.duty-head {
   display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.duty-meta {
+  margin-top: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  color: var(--dim);
+}
+
+.chat-modes {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
   gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
   overflow-x: auto;
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--dyn-line-soft);
   scrollbar-width: none;
 }
 
-.chat-mode-row::-webkit-scrollbar { display: none; }
-
-.chat-mode-row button {
-  flex: 0 0 auto;
-  padding: 6px 9px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--dyn-dim);
-  font-family: inherit;
-  font-size: 0.58rem;
-  min-height: 34px;
+.chat-modes::-webkit-scrollbar {
+  display: none;
 }
 
-.chat-mode-row button.is-active {
-  border-color: var(--dyn-gold);
-  color: var(--dyn-gold-bright);
+.chat-modes button {
+  flex: 0 0 auto;
+  padding: 6px 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dim);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+}
+
+.chat-modes button.is-active {
+  border-color: var(--gold-line);
+  background: rgba(201, 162, 39, 0.09);
+  color: var(--gold-bright);
+}
+
+.chat-switch {
+  margin-left: auto;
+  border-color: var(--line) !important;
 }
 
 .chat-feed {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 11px;
+  overscroll-behavior: contain;
+  padding: 14px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
-.chat-feed.is-audience {
-  padding: 16px 13px;
-  background: radial-gradient(circle at 50% 0%, rgba(201, 162, 39, 0.04), transparent 35%);
-}
-
-.chat-msg {
+.msg {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  max-width: 90%;
+  gap: 7px;
+  max-width: 92%;
 }
 
-.chat-msg.is-me {
+.msg.is-me {
   align-self: flex-end;
   flex-direction: row-reverse;
 }
 
-.chat-bubble {
-  padding: 8px 10px;
-  border: 1px solid var(--dyn-line-soft);
-  background: var(--dyn-panel-2);
-  color: #d8ccb9;
-  font-size: 0.7rem;
-  line-height: 1.75;
+.msg-body {
+  min-width: 0;
+}
+
+.bubble {
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 2px 10px 10px 10px;
+  background: var(--panel-2);
+  color: #ddd2bf;
+  font-size: 0.86rem;
+  line-height: 1.9;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
-.chat-msg.is-me .chat-bubble {
+.msg.is-me .bubble {
   border-color: rgba(201, 162, 39, 0.35);
-  background: rgba(201, 162, 39, 0.09);
-  color: var(--dyn-text);
+  border-radius: 10px 2px 10px 10px;
+  background: rgba(201, 162, 39, 0.1);
+  color: #f0e6d4;
 }
 
-.chat-msg small {
+.msg small {
   display: block;
-  margin-top: 2px;
-  color: var(--dyn-dim);
-  font-size: 0.48rem;
+  margin-top: 3px;
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  color: var(--dim);
 }
 
-.chat-feed.is-audience .chat-msg {
+.msg.is-me small {
+  text-align: right;
+}
+
+.chat-feed.is-audience {
+  padding: 18px 16px;
+}
+
+.chat-feed.is-audience .msg {
+  display: block;
   max-width: 100%;
-  display: block;
-  border-left: 2px solid var(--dyn-line);
-  padding-left: 10px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
 }
 
-.chat-feed.is-audience .chat-msg.is-me {
-  border-left-color: var(--dyn-gold);
+.chat-feed.is-audience .msg.is-me {
+  border-left-color: var(--gold);
 }
 
-.chat-feed.is-audience .chat-msg .chat-avatar {
+.chat-feed.is-audience .msg .avatar {
   display: none;
 }
 
-.chat-feed.is-audience .chat-bubble {
+.chat-feed.is-audience .bubble {
   padding: 0;
   border: none;
+  border-radius: 0;
   background: transparent;
-  font-size: 0.78rem;
-  line-height: 1.95;
+  font-size: 0.94rem;
+  line-height: 2.05;
 }
 
-.chat-typing {
-  padding: 3px 6px;
-  color: var(--dyn-dim);
-  font-size: 0.55rem;
+.typing {
+  padding: 2px 4px;
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  color: var(--dim);
+  animation: breathe 1.6s ease-in-out infinite;
 }
 
 .chat-topics {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   display: flex;
   gap: 5px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
   overflow-x: auto;
-  padding: 7px 10px;
-  border-top: 1px solid var(--dyn-line-soft);
   scrollbar-width: none;
 }
 
-.chat-topics::-webkit-scrollbar { display: none; }
+.chat-topics::-webkit-scrollbar {
+  display: none;
+}
 
 .chat-topic {
   flex: 0 0 auto;
-  min-height: 34px;
-  padding: 7px 9px;
-  border: 1px solid var(--dyn-line-soft);
-  background: var(--dyn-panel-2);
-  color: var(--dyn-muted);
-  font-family: inherit;
-  font-size: 0.6rem;
+  min-height: 32px;
+  padding: 6px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
 }
 
-.chat-topic:disabled { opacity: 0.4; }
-
-.chat-composer {
-  flex-shrink: 0;
-  display: flex;
-  gap: 6px;
-  padding: 8px 10px calc(9px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--dyn-line-soft);
-  background: #100d0a;
+.chat-topic:hover:not(:disabled) {
+  border-color: var(--gold-line);
+  color: var(--gold-bright);
 }
 
-.chat-composer input {
-  flex: 1;
-  min-width: 0;
-  min-height: 44px;
-  padding: 9px 10px;
-  border: 1px solid var(--dyn-line);
-  background: rgba(0, 0, 0, 0.25);
-  color: var(--dyn-text);
-  font-family: inherit;
-  /* iOS 低于 16px 会在聚焦时自动放大页面 */
-  font-size: 16px;
-}
-
-.chat-composer input:focus { outline: none; border-color: var(--dyn-gold); }
-
-.chat-send {
-  flex: 0 0 auto;
-  min-width: 52px;
-  border: 1px solid var(--dyn-gold);
-  background: rgba(201, 162, 39, 0.12);
-  color: var(--dyn-gold-bright);
-  font-family: inherit;
-  font-size: 0.72rem;
+.chat-topic:disabled {
+  opacity: 0.4;
 }
 
 .chat-effect {
-  flex-shrink: 0;
-  max-width: 100%;
+  flex: 0 0 auto;
   margin: 0;
-  padding: 4px 10px 2px;
+  padding: 3px 14px 2px;
   overflow: hidden;
-  color: var(--dyn-gold);
-  font-size: 0.54rem;
+  color: var(--gold);
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
   text-align: right;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.chat-error {
-  margin: 0;
-  padding: 0 10px 6px;
-  color: #d7857e;
-  font-size: 0.56rem;
-}
-
-.chat-empty {
-  padding: 24px 12px;
-  text-align: center;
-  color: var(--dyn-dim);
-  font-size: 0.6rem;
-}
-
-.chat-letter {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  margin: 9px 10px;
-  padding: 15px;
-  border: 1px solid #4a3b2a;
-  background:
-    linear-gradient(180deg, rgba(201, 162, 39, 0.06), transparent 28%),
-    #17130e;
-}
-
-.chat-letter-title {
-  text-align: center;
-  font-family: var(--font-heading, serif);
-  font-size: 0.98rem;
-  letter-spacing: 0.16em;
-  color: var(--dyn-gold-bright);
-}
-
-.chat-letter-meta {
-  margin-top: 4px;
-  text-align: center;
-  color: var(--dyn-dim);
-  font-size: 0.52rem;
-}
-
-.chat-letter-line {
-  margin-top: 12px;
-  color: #d8ccb9;
+.chat-alert {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(189, 92, 82, 0.45);
+  border-radius: var(--r-sm);
+  background: rgba(189, 92, 82, 0.08);
+  color: #e0a9a2;
+  font-family: var(--font-sans);
   font-size: 0.72rem;
-  line-height: 2;
+  line-height: 1.7;
 }
 
-.chat-letter-line.is-me {
-  padding-left: 9px;
-  border-left: 2px solid var(--dyn-gold);
-  color: var(--dyn-text);
-}
-
-.chat-seal {
-  display: inline-grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  margin-top: 12px;
-  border: 1px solid var(--dyn-red);
-  color: var(--dyn-red);
-  font-size: 0.54rem;
-  transform: rotate(-4deg);
-}
-
-.chat-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
+.composer {
+  flex: 0 0 auto;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.62);
-}
-
-.chat-sheet {
-  width: 100%;
-  max-width: min(480px, 100vw);
-  max-height: 82dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 13px 13px calc(18px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--dyn-gold);
-  border-radius: 10px 10px 0 0;
-  background: var(--dyn-panel);
-}
-
-.chat-sheet-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   gap: 8px;
-}
-
-.chat-sheet-head h3 {
-  margin: 0;
-  font-family: var(--font-heading, serif);
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--dyn-gold-bright);
-}
-
-.chat-person {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-top: 8px;
-}
-
-.chat-kv {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px dashed var(--dyn-line-soft);
-  color: var(--dyn-muted);
-  font-size: 0.6rem;
-}
-
-.chat-kv b { color: var(--dyn-text); font-weight: 400; text-align: right; }
-
-.chat-meter {
-  height: 6px;
-  margin: 3px 0 7px;
-  border: 1px solid var(--dyn-line-soft);
+  padding: 9px 12px calc(10px + var(--safe-bottom));
+  border-top: 1px solid var(--line);
   background: #0d0b09;
 }
 
-.chat-meter i { display: block; height: 100%; background: var(--dyn-gold); }
+.composer input {
+  flex: 1;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text);
+  font-size: 16px;
+}
 
-.chat-effect-box {
+.composer input:focus {
+  outline: none;
+  border-color: var(--gold-line);
+}
+
+.composer .btn {
+  flex: 0 0 auto;
+  min-width: 64px;
+  padding: 0 14px;
+}
+
+/* 密折 */
+
+.letter {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 12px;
+  padding: 18px 16px;
+  border: 1px solid #473a2a;
+  border-radius: var(--r-sm);
+  background:
+    linear-gradient(180deg, rgba(201, 162, 39, 0.06), transparent 26%),
+    #17130e;
+}
+
+.letter-title {
+  text-align: center;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  letter-spacing: 0.18em;
+  color: var(--gold-bright);
+}
+
+.letter-meta {
+  margin-top: 4px;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  color: var(--dim);
+}
+
+.letter-line {
+  margin-top: 14px;
+  color: #ddd2bf;
+  font-size: 0.86rem;
+  line-height: 2.05;
+}
+
+.letter-line.is-me {
+  padding-left: 10px;
+  border-left: 2px solid var(--gold);
+  color: #f0e6d4;
+}
+
+.letter-seal {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin-top: 16px;
+  border: 1px solid var(--red);
+  color: var(--red);
+  font-size: 0.6rem;
+  transform: rotate(-4deg);
+}
+
+/* 抽屉 */
+
+.detail-person {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 10px;
+}
+
+.detail-kv {
   margin-top: 8px;
-  padding: 8px;
-  border: 1px dashed var(--dyn-line);
-  background: rgba(201, 162, 39, 0.04);
-  color: #d8ccb9;
-  font-size: 0.58rem;
+}
+
+.bar + .kv {
+  margin-top: 8px;
+}
+
+.effect-box {
+  margin-top: 14px;
+  padding: 11px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
+  background: rgba(201, 162, 39, 0.05);
+  color: #ddd2bf;
+  font-family: var(--font-sans);
+  font-size: 0.74rem;
   line-height: 1.8;
 }
 
-@media (max-width: 380px) {
-  .chat-duty-grid { grid-template-columns: 1fr; }
-  .chat-topics { gap: 4px; }
-  .chat-topic { padding: 5px 6px; }
+.effect-box span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--gold);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
 }
 
-/* ===== 桌面端：联系人改为多列，对话限宽 ===== */
+.sheet-contacts {
+  display: flex;
+  flex-direction: column;
+}
 
-@media (min-width: 1024px) {
-  .chat-list-head { padding: 20px 18px 10px; }
-  .chat-filters { padding: 0 18px 12px; }
-
+@media (min-width: 560px) {
   .chat-scroll {
+    padding: 0 18px 28px;
+  }
+
+  .contact {
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    padding: 11px 12px;
+    margin-bottom: 7px;
+    background: var(--panel);
+  }
+
+  .chat-filters {
+    padding: 12px 18px;
+  }
+
+  .chat-head {
+    padding: 12px 18px;
+  }
+
+  .chat-feed {
+    padding: 16px 18px;
+  }
+}
+
+@media (min-width: 900px) {
+  .chat-scroll:not(.is-grid) {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     align-content: start;
-    gap: 8px;
-    padding: 0 18px 22px;
+    gap: 7px;
   }
 
-  .chat-contact {
-    border: 1px solid var(--dyn-line-soft);
-    border-radius: 2px;
-    padding: 12px 14px;
+  .chat-scroll.is-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
-
-  .chat-contact:hover { background: rgba(201, 162, 39, 0.06); }
 
   .chat-feed,
-  .chat-composer {
+  .composer,
+  .chat-topics,
+  .chat-effect,
+  .chat-alert,
+  .letter {
     width: 100%;
-    max-width: 840px;
-    margin: 0 auto;
+    max-width: 820px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
-  .chat-feed { padding: 16px 18px; }
+  .chat-feed,
+  .composer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
 
-  .chat-top { padding: 12px 18px; }
+  .chat-topics {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
 
-  .chat-msg { max-width: 68%; }
+  .msg {
+    max-width: 74%;
+  }
+
+  .letter {
+    max-width: 720px;
+    margin-top: 18px;
+    padding: 26px;
+  }
 }
 </style>

@@ -80,7 +80,7 @@ const runDistrictAction = (action) => {
   if (!canAct.value) return
   const result = startCityAction(workingRun.value, district.value.id, action.id)
   if (apply(result)) {
-    nextTick(() => document.querySelector('.city-encounter')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    nextTick(() => document.querySelector('.encounter-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   }
 }
 
@@ -132,143 +132,155 @@ const back = () => emit('back')
 
 <template>
   <div class="city-screen">
-    <header class="city-top">
-      <button type="button" class="city-icon" @click="back">‹</button>
-      <div class="city-title">
-        <b>{{ view === 'night' ? '灯市 · 夜行' : '京城 · 出宫' }}</b>
-        <span>{{ view === 'night' ? '教坊 / 画舫 / 酒楼 / 后巷' : '坊市 / 百姓 / 消息' }}</span>
+    <header class="city-head">
+      <button type="button" class="icon-btn" aria-label="返回" @click="back">‹</button>
+      <div class="city-head-main">
+        <h1>{{ view === 'night' ? '灯市' : '京城' }}</h1>
+        <p>{{ view === 'night' ? '教坊 · 画舫 · 酒楼 · 后巷' : '坊市 · 百姓 · 消息' }}</p>
       </div>
-      <button type="button" class="city-icon" @click="view = view === 'night' ? 'city' : 'night'">
+      <button type="button" class="btn btn-sm btn-ghost" @click="view = view === 'night' ? 'city' : 'night'">
         {{ view === 'night' ? '回京' : '入夜' }}
       </button>
     </header>
 
     <div class="city-hud">
-      <span class="is-gold">行动 {{ workingRun.actionPoints ?? 0 }}</span>
-      <span>内帑 {{ workingRun.resources?.treasury ?? 0 }}</span>
-      <span>民心 {{ workingRun.resources?.popularity ?? 0 }}</span>
-      <span>威望 {{ workingRun.resources?.prestige ?? 0 }}</span>
-      <span>治安 {{ city.order ?? 0 }}</span>
-      <span :class="{ 'is-red': (workingRun.ruler?.health ?? 0) < 40 }">健康 {{ workingRun.ruler?.health ?? 0 }}</span>
-      <span :class="{ 'is-red': burden.stress >= 70 }">压力 {{ burden.stress }}</span>
-      <span class="is-red">风闻 {{ city.scandal ?? 0 }}</span>
+      <span class="chip chip-gold">行动 {{ workingRun.actionPoints ?? 0 }}</span>
+      <span class="chip">帑 {{ workingRun.resources?.treasury ?? 0 }}</span>
+      <span class="chip">民心 {{ workingRun.resources?.popularity ?? 0 }}</span>
+      <span class="chip">威望 {{ workingRun.resources?.prestige ?? 0 }}</span>
+      <span class="chip">治安 {{ city.order ?? 0 }}</span>
+      <span class="chip" :class="{ 'chip-red': (workingRun.ruler?.health ?? 0) < 40 }">健康 {{ workingRun.ruler?.health ?? 0 }}</span>
+      <span class="chip" :class="{ 'chip-red': burden.stress >= 70 }">压力 {{ burden.stress }}</span>
+      <span class="chip chip-red">风闻 {{ city.scandal ?? 0 }}</span>
     </div>
 
-    <button type="button" class="city-burden-strip" @click="showBurden = !showBurden">
-      <span class="city-burden-title">君主状态</span>
-      <span v-for="trait in burden.traits" :key="trait.id" class="city-burden-chip is-trait">{{ trait.label }}</span>
-      <span v-for="debuff in burden.debuffs" :key="debuff.id" class="city-burden-chip is-debuff">{{ debuff.label }}</span>
-      <span v-if="!burden.traits.length && !burden.debuffs.length" class="city-burden-empty">暂无负面状态</span>
-      <span class="city-burden-more">{{ showBurden ? '收起' : '详情' }}</span>
+    <button type="button" class="burden-strip" @click="showBurden = !showBurden">
+      <span class="burden-title">君主状态</span>
+      <span v-for="trait in burden.traits" :key="trait.id" class="chip chip-gold">{{ trait.label }}</span>
+      <span v-for="debuff in burden.debuffs" :key="debuff.id" class="chip chip-red">{{ debuff.label }}</span>
+      <span v-if="!burden.traits.length && !burden.debuffs.length" class="chip">暂无负面状态</span>
+      <span class="burden-more">{{ showBurden ? '收起' : '详情' }}</span>
     </button>
-    <div v-if="showBurden" class="city-burden-panel">
-      <div class="city-burden-line"><span>压力</span><b>{{ burden.stress }} / 100</b></div>
-      <div class="city-burden-meter"><i :style="{ width: `${burden.stress}%` }"></i></div>
-      <div class="city-burden-line"><span>暴政</span><b>{{ burden.tyranny }}</b></div>
-      <div class="city-burden-line"><span>恐惧</span><b>{{ burden.dread }}</b></div>
+
+    <div v-if="showBurden" class="burden-panel">
+      <div class="kv"><span>压力</span><b>{{ burden.stress }} / 100</b></div>
+      <div class="bar bar-red"><i :style="{ width: `${burden.stress}%` }"></i></div>
+      <div class="kv"><span>暴政</span><b>{{ burden.tyranny }}</b></div>
+      <div class="kv"><span>恐惧</span><b>{{ burden.dread }}</b></div>
       <p v-for="trait in burden.traits" :key="trait.id"><b>{{ trait.label }}</b> · {{ trait.desc }}</p>
       <p v-for="debuff in burden.debuffs" :key="debuff.id"><b>{{ debuff.label }}</b> · {{ debuff.desc }}</p>
-      <p class="city-burden-warn">压力到 100，或健康归零，会直接进入驾崩。</p>
+      <p class="burden-warn">压力到 100，或健康归零，会直接进入驾崩。</p>
     </div>
 
     <div class="city-tabs">
       <button type="button" :class="{ 'is-active': view === 'city' }" @click="view = 'city'">京城</button>
       <button type="button" :class="{ 'is-active': view === 'night' }" @click="view = 'night'">灯市</button>
+      <span class="city-tabs-note">{{ view === 'night' ? '夜行 · 易生风闻' : '出宫 · 可见民情' }}</span>
     </div>
 
     <div class="city-scroll">
+      <!-- ===== 京城 ===== -->
       <template v-if="view === 'city'">
-        <div class="city-mode">
+        <div class="mode-switch">
           <button type="button" :class="{ 'is-active': city.mode === 'incognito' }" @click="setMode('incognito')">微服</button>
           <button type="button" :class="{ 'is-active': city.mode === 'formal' }" @click="setMode('formal')">仪仗</button>
         </div>
-        <p class="city-note">
+        <p class="note">
           {{ city.mode === 'formal'
-            ? '仪仗：内帑 -50 · 威望 +1；百姓会被提前清走，很多事看不到。'
+            ? '仪仗：内帑 -50、威望 +1；百姓会被提前清走，很多事看不到。'
             : '微服：能看见真话；每次行动健康 -1，威望收益低。' }}
         </p>
 
-        <div class="city-map">
+        <div class="section"><span>坊市</span><span class="section-note">{{ CITY_DISTRICTS.length }} 处</span></div>
+        <div class="ward-grid">
           <button
             v-for="item in CITY_DISTRICTS"
             :key="item.id"
             type="button"
-            class="city-ward"
+            class="ward"
             :class="{ 'is-active': item.id === city.districtId }"
             @click="chooseDistrict(item.id)"
           >
-            <b>{{ item.name }}</b>
-            <small>{{ item.subtitle }}</small>
-            <em>{{ '●'.repeat(item.risk) }}{{ '○'.repeat(3 - item.risk) }}</em>
+            <span class="ward-name">{{ item.name }}</span>
+            <span class="ward-sub">{{ item.subtitle }}</span>
+            <span class="ward-risk" :class="{ 'is-high': item.risk >= 2 }">
+              {{ '●'.repeat(item.risk) }}{{ '○'.repeat(3 - item.risk) }}
+            </span>
           </button>
         </div>
 
-        <div class="city-panel">
-          <h3>{{ district.name }}</h3>
+        <section class="district-panel">
+          <div class="district-head">
+            <h2>{{ district.name }}</h2>
+            <span class="chip">风险 {{ '●'.repeat(district.risk) }}{{ '○'.repeat(3 - district.risk) }}</span>
+          </div>
           <p>{{ district.desc }}</p>
-          <div class="city-actions">
+          <div class="action-list">
             <button
               v-for="action in district.actions"
               :key="action.id"
               type="button"
-              class="city-action"
+              class="action-row"
               :disabled="!canAct"
               @click="runDistrictAction(action)"
             >
-              <span><b>{{ action.label }}</b><small>{{ action.desc }}</small></span>
-              <em>{{ canAct ? '1 行动' : '行动不足' }}</em>
+              <span class="action-main">
+                <b>{{ action.label }}</b>
+                <small>{{ action.desc }}</small>
+              </span>
+              <span class="action-cost">{{ canAct ? '1 行动' : '行动不足' }}</span>
             </button>
           </div>
-        </div>
+        </section>
 
-        <div v-if="city.encounter" class="city-encounter">
-          <div class="city-actor">
-            <div class="city-avatar">{{ city.encounter.actor?.slice(0, 1) }}</div>
+        <div v-if="city.encounter" class="encounter-card">
+          <div class="encounter-head">
+            <div class="avatar avatar-sm">{{ city.encounter.actor?.slice(0, 1) }}</div>
             <div>
-              <b>{{ city.encounter.actor }}</b>
-              <span>
-                {{ city.encounter.role }}<template v-if="city.encounter.actorOffice && city.encounter.actorOffice !== city.encounter.role"> · {{ city.encounter.actorOffice }}</template>
+              <h3>{{ city.encounter.title }}</h3>
+              <p class="row-sub">
+                {{ city.encounter.actor }} · {{ city.encounter.role }}<template v-if="city.encounter.actorOffice && city.encounter.actorOffice !== city.encounter.role"> · {{ city.encounter.actorOffice }}</template>
                 · {{ city.encounter.districtName }}
-              </span>
+              </p>
             </div>
-            <span v-if="city.encounter.formal" class="city-tag">仪仗所见</span>
+            <span v-if="city.encounter.formal" class="chip chip-gold">仪仗所见</span>
           </div>
-          <h3>{{ city.encounter.title }}</h3>
-          <p>{{ city.encounter.text }}</p>
-          <div class="city-choices">
+          <p class="encounter-text">{{ city.encounter.text }}</p>
+          <div class="choice-list">
             <button
               v-for="choice in city.encounter.choices"
               :key="choice.id"
               type="button"
+              class="choice"
               :disabled="busy"
               @click="chooseCityOption(choice)"
             >
-              <b>{{ choice.text }}</b>
-              <small>{{ choice.hint }}</small>
+              <span class="choice-title">{{ choice.text }}</span>
+              <span class="choice-hint">{{ choice.hint }}</span>
             </button>
           </div>
         </div>
-
-        <div v-else-if="city.result" class="city-result">{{ city.result }}</div>
+        <div v-else-if="city.result" class="result-panel"><p>{{ city.result }}</p></div>
         <p v-if="error" class="city-error">{{ error }}</p>
 
-        <div class="city-log">
-          <h3>出宫记事</h3>
-          <div v-if="cityLog.length === 0" class="city-empty">还没有出宫。</div>
-          <div v-for="item in cityLog" :key="item.id" class="city-log-item">
+        <div class="section"><span>出宫记事</span></div>
+        <p v-if="cityLog.length === 0" class="empty empty-sm">还没有出宫。</p>
+        <div v-else class="log-list">
+          <div v-for="item in cityLog" :key="item.id" class="log-row">
             <b>{{ item.title }}</b>
             <span>{{ item.desc }}</span>
           </div>
         </div>
       </template>
 
+      <!-- ===== 灯市 ===== -->
       <template v-else>
-        <div class="city-night-venues">
+        <div class="venue-grid">
           <button
             v-for="item in venues"
             :key="item.id"
             type="button"
-            class="city-venue"
+            class="venue"
             :class="{ 'is-active': item.id === venue.id }"
             @click="chooseVenue(item.id)"
           >
@@ -277,60 +289,70 @@ const back = () => emit('back')
           </button>
         </div>
 
-        <div class="city-panel">
-          <h3>{{ venue.name }}</h3>
-          <div class="city-performers">
+        <section class="district-panel">
+          <div class="district-head">
+            <h2>{{ venue.name }}</h2>
+            <span class="chip">行动点 {{ workingRun.actionPoints ?? 0 }}</span>
+          </div>
+
+          <div class="performer-grid">
             <button
               v-for="person in nightPerformers"
               :key="person.id"
               type="button"
-              class="city-performer"
+              class="performer"
               :class="{ 'is-active': person.id === selectedPerformerId }"
               @click="openPerformer(person)"
             >
-              <div class="city-avatar">{{ person.name.slice(0, 1) }}</div>
-              <div>
+              <div class="avatar avatar-sm">{{ person.name.slice(0, 1) }}</div>
+              <div class="performer-main">
                 <b>{{ person.name }}</b>
                 <small>{{ person.art }} · 才艺 {{ person.talent }} · 好感 {{ person.favor }}</small>
               </div>
             </button>
+            <p v-if="nightPerformers.length === 0" class="empty empty-sm">此处暂时无人。</p>
           </div>
 
-          <div v-if="selectedPerformer" class="city-performer-detail">
-            <div class="city-performer-head">
+          <div v-if="selectedPerformer" class="performer-detail">
+            <div class="performer-head">
               <b>{{ selectedPerformer.name }}</b>
-              <span>{{ selectedPerformer.gender }} · {{ selectedPerformer.age }} 岁 · {{ selectedPerformer.art }}</span>
+              <span class="chip">{{ selectedPerformer.gender }} · {{ selectedPerformer.age }} 岁 · {{ selectedPerformer.art }}</span>
             </div>
             <p>{{ selectedPerformer.background }}</p>
-            <div class="city-tags">
-              <span v-for="tag in selectedPerformer.tags" :key="tag" class="city-tag">{{ tag }}</span>
-            </div>
-            <div v-if="!selectedPerformer.recruited" class="city-actions">
-              <button type="button" class="city-action" :disabled="!canAct" @click="runPerformerAction('listen')">
-                <span><b>听一曲</b><small>内帑 -50 · 好感 +8</small></span><em>1 行动</em>
-              </button>
-              <button type="button" class="city-action" :disabled="!canAct" @click="runPerformerAction('talk')">
-                <span><b>清谈</b><small>好感 +10 · 圣听 +1</small></span><em>1 行动</em>
-              </button>
-              <button type="button" class="city-action" :disabled="!canAct" @click="runPerformerAction('gift')">
-                <span><b>赠礼</b><small>内帑 -300 · 好感 +15</small></span><em>1 行动</em>
-              </button>
-              <button type="button" class="city-action" :disabled="!canAct" @click="runPerformerAction('probe')">
-                <span><b>问底细</b><small>圣听 +2 · 好感 -2 · 可能翻出秘密</small></span><em>1 行动</em>
-              </button>
-              <button type="button" class="city-action" :disabled="!canAct" @click="openRoles">
-                <span><b>延请入宫</b><small>需要足够好感；名分不同，后果不同</small></span><em>1 行动</em>
-              </button>
+            <div class="chips">
+              <span v-for="tag in selectedPerformer.tags" :key="tag" class="chip">{{ tag }}</span>
             </div>
 
-            <div v-else class="city-result">此人已经入宫。</div>
+            <div v-if="!selectedPerformer.recruited" class="action-list performer-actions">
+              <button type="button" class="action-row" :disabled="!canAct" @click="runPerformerAction('listen')">
+                <span class="action-main"><b>听一曲</b><small>内帑 -50 · 好感 +8</small></span>
+                <span class="action-cost">1 行动</span>
+              </button>
+              <button type="button" class="action-row" :disabled="!canAct" @click="runPerformerAction('talk')">
+                <span class="action-main"><b>清谈</b><small>好感 +10 · 圣听 +1</small></span>
+                <span class="action-cost">1 行动</span>
+              </button>
+              <button type="button" class="action-row" :disabled="!canAct" @click="runPerformerAction('gift')">
+                <span class="action-main"><b>赠礼</b><small>内帑 -300 · 好感 +15</small></span>
+                <span class="action-cost">1 行动</span>
+              </button>
+              <button type="button" class="action-row" :disabled="!canAct" @click="runPerformerAction('probe')">
+                <span class="action-main"><b>问底细</b><small>圣听 +2 · 好感 -2 · 可能翻出秘密</small></span>
+                <span class="action-cost">1 行动</span>
+              </button>
+              <button type="button" class="action-row" :disabled="!canAct" @click="openRoles">
+                <span class="action-main"><b>延请入宫</b><small>需要足够好感；名分不同，后果不同</small></span>
+                <span class="action-cost">1 行动</span>
+              </button>
+            </div>
+            <p v-else class="result-panel">此人已经入宫。</p>
 
-            <div v-if="roleOpenFor === selectedPerformer.id && !selectedPerformer.recruited" class="city-roles">
+            <div v-if="roleOpenFor === selectedPerformer.id && !selectedPerformer.recruited" class="role-grid">
               <button
                 v-for="(role, key) in roleOptions"
                 :key="key"
                 type="button"
-                class="city-role"
+                class="role"
                 :disabled="!selectedPerformer.willing.includes(key) || selectedPerformer.favor < role.favor || !canAct"
                 @click="chooseRole(key)"
               >
@@ -342,41 +364,49 @@ const back = () => emit('back')
             </div>
           </div>
 
-          <div class="city-extra-title">夜行杂事</div>
-          <div class="city-actions">
+          <div class="section"><span>夜行杂事</span></div>
+          <div class="action-list">
             <button
               v-for="extra in venue.extras"
               :key="extra.id"
               type="button"
-              class="city-action"
+              class="action-row"
               :disabled="!canAct || workingRun.resources.treasury < extra.cost"
               @click="runExtra(extra)"
             >
-              <span><b>{{ extra.label }}</b><small>{{ extra.desc }}</small></span>
-              <em>1 行动</em>
+              <span class="action-main"><b>{{ extra.label }}</b><small>{{ extra.desc }}</small></span>
+              <span class="action-cost">1 行动</span>
+            </button>
+          </div>
+        </section>
+
+        <div v-if="city.result" class="result-panel"><p>{{ city.result }}</p></div>
+        <p v-if="error" class="city-error">{{ error }}</p>
+
+        <div v-if="city.impeachment" class="impeach">
+          <h3>御史弹劾</h3>
+          <p>御史递折，说陛下夜宿灯市，延请来历不明之人入宫。折子没有点名，但每个人都看得懂。</p>
+          <div class="action-list">
+            <button type="button" class="action-row" @click="resolveImpeach('admit')">
+              <span class="action-main"><b>认下</b><small>内帑 -500 · 风评 +2 · 后宫张力 +2</small></span>
+            </button>
+            <button type="button" class="action-row" @click="resolveImpeach('deny')">
+              <span class="action-main"><b>否认</b><small>风评 -3 · 风闻 +5</small></span>
+            </button>
+            <button type="button" class="action-row" @click="resolveImpeach('dismiss')">
+              <span class="action-main"><b>送出宫一人</b><small>风评 +1 · 后宫张力 -5 · 风闻 -10</small></span>
             </button>
           </div>
         </div>
 
-        <div v-if="city.result" class="city-result">{{ city.result }}</div>
-        <p v-if="error" class="city-error">{{ error }}</p>
-
-        <div v-if="city.impeachment" class="city-impeach">
-          <h3>御史弹劾</h3>
-          <p>御史递折，说陛下夜宿灯市，延请来历不明之人入宫。折子没有点名，但每个人都看得懂。</p>
-          <div class="city-actions">
-            <button type="button" class="city-action" @click="resolveImpeach('admit')"><span><b>认下</b><small>内帑 -500 · 风评 +2 · 后宫张力 +2</small></span></button>
-            <button type="button" class="city-action" @click="resolveImpeach('deny')"><span><b>否认</b><small>风评 -3 · 风闻 +5</small></span></button>
-            <button type="button" class="city-action" @click="resolveImpeach('dismiss')"><span><b>送出宫一人</b><small>风评 +1 · 后宫张力 -5 · 风闻 -10</small></span></button>
-          </div>
-        </div>
-
-        <div class="city-roster">
-          <h3>已带回宫 · {{ city.roster?.length || 0 }}</h3>
-          <div v-if="!city.roster?.length" class="city-empty">还没有人跟你回宫。</div>
-          <div v-for="item in city.roster" :key="item.id" class="city-roster-item">
-            <b>{{ item.name }}</b>
-            <span>{{ item.roleLabel }} · 好感 {{ item.favor }}</span>
+        <div class="section"><span>已带回宫 · {{ city.roster?.length || 0 }}</span></div>
+        <p v-if="!city.roster?.length" class="empty empty-sm">还没有人跟你回宫。</p>
+        <div v-else class="row-list">
+          <div v-for="item in city.roster" :key="item.id" class="row">
+            <div class="row-main">
+              <div class="row-title">{{ item.name }}</div>
+              <div class="row-sub">{{ item.roleLabel }} · 好感 {{ item.favor }}</div>
+            </div>
           </div>
         </div>
       </template>
@@ -391,459 +421,592 @@ const back = () => emit('back')
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding-top: env(safe-area-inset-top);
+  padding-top: var(--safe-top);
   background:
-    radial-gradient(circle at 50% 0%, rgba(139, 123, 176, 0.07), transparent 32%),
-    var(--dyn-ink);
+    radial-gradient(circle at 50% 0, rgba(154, 138, 192, 0.07), transparent 34%),
+    var(--ink);
   overflow: hidden;
 }
 
-.city-top {
-  flex-shrink: 0;
+.city-head {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--dyn-line-soft);
-  background: rgba(20, 17, 14, 0.96);
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(12, 10, 8, 0.9);
 }
 
-.city-icon {
-  min-width: 40px;
-  min-height: 40px;
-  border: 1px solid var(--dyn-line-soft);
-  background: transparent;
-  color: var(--dyn-muted);
+.city-head-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.city-head-main h1 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  color: var(--gold-bright);
+}
+
+.city-head-main p {
+  margin: 2px 0 0;
+  font-family: var(--font-sans);
   font-size: 0.66rem;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
-.city-title { flex: 1; min-width: 0; }
-.city-title b { display: block; font-size: 0.78rem; font-weight: 500; color: var(--dyn-gold-bright); }
-.city-title span { display: block; margin-top: 1px; font-size: 0.5rem; color: var(--dyn-dim); }
 
 .city-hud {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
-  gap: 3px;
-  padding: 6px 9px;
-  border-bottom: 1px solid var(--dyn-line-soft);
+  gap: 5px;
+  padding: 9px 12px 2px;
 }
 
-.city-hud span {
-  padding: 1px 5px;
-  border: 1px solid var(--dyn-line-soft);
-  color: var(--dyn-muted);
-  font-size: 0.52rem;
+.burden-strip {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 12px 0;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--muted);
+  text-align: left;
 }
-.city-hud .is-gold { border-color: rgba(201, 162, 39, 0.45); color: var(--dyn-gold); }
-.city-hud .is-red { border-color: rgba(176, 68, 60, 0.45); color: #d7857e; }
+
+.burden-title {
+  flex: 0 0 auto;
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  letter-spacing: 0.14em;
+  color: var(--gold);
+}
+
+.burden-more {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  color: var(--dim);
+}
+
+.burden-panel {
+  flex: 0 0 auto;
+  margin: 6px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+}
+
+.burden-panel p {
+  margin: 7px 0 0;
+  line-height: 1.75;
+  color: var(--dim);
+}
+
+.burden-panel p b {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.burden-panel .burden-warn {
+  color: #d69b94;
+}
 
 .city-tabs {
-  flex-shrink: 0;
+  flex: 0 0 auto;
   display: flex;
+  align-items: center;
   gap: 4px;
-  padding: 5px 9px;
-  border-bottom: 1px solid var(--dyn-line-soft);
+  margin: 10px 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
 }
 
 .city-tabs button {
-  flex: 1;
-  min-height: 34px;
-  border: 1px solid var(--dyn-line-soft);
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   background: transparent;
-  color: var(--dyn-dim);
-  font-size: 0.6rem;
+  color: var(--dim);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
 }
 
 .city-tabs button.is-active {
-  border-color: var(--dyn-gold);
-  background: rgba(201, 162, 39, 0.08);
-  color: var(--dyn-gold-bright);
+  border-color: var(--gold-line);
+  background: rgba(201, 162, 39, 0.1);
+  color: var(--gold-bright);
+}
+
+.city-tabs-note {
+  margin-left: auto;
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  color: var(--dim);
 }
 
 .city-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 8px 10px calc(20px + env(safe-area-inset-bottom));
+  overscroll-behavior: contain;
+  padding: 12px 12px 30px;
 }
 
-.city-mode { display: flex; gap: 5px; }
-.city-mode button {
-  flex: 1;
-  min-height: 38px;
-  border: 1px solid var(--dyn-line-soft);
-  background: var(--dyn-panel);
-  color: var(--dyn-muted);
+.city-scroll .mode-switch {
+  margin-bottom: 2px;
+}
+
+.ward-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ward {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  color: var(--text);
+  text-align: left;
+}
+
+.ward:hover {
+  border-color: var(--gold-line);
+}
+
+.ward.is-active {
+  border-color: var(--gold-line);
+  background:
+    radial-gradient(circle at 100% 0, rgba(201, 162, 39, 0.14), transparent 70%),
+    var(--panel);
+}
+
+.ward-name {
+  font-size: 0.94rem;
+  letter-spacing: 0.1em;
+}
+
+.ward-sub {
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ward-risk {
+  margin-top: 5px;
   font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  color: var(--jade);
 }
-.city-mode button.is-active { border-color: var(--dyn-gold); color: var(--dyn-gold-bright); }
 
-.city-note {
-  margin: 5px 0 0;
-  color: var(--dyn-dim);
-  font-size: 0.54rem;
+.ward-risk.is-high {
+  color: var(--red);
+}
+
+.district-panel {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+}
+
+.district-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.district-head h2 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  color: var(--gold-bright);
+}
+
+.district-panel > p {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  line-height: 1.9;
+  color: var(--muted);
+}
+
+.action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+}
+
+.action-row:hover:not(:disabled) {
+  border-color: var(--gold-line);
+}
+
+.action-row:disabled {
+  opacity: 0.4;
+}
+
+.action-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.action-main b {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.action-main small {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  line-height: 1.65;
+  color: var(--dim);
+}
+
+.action-cost {
+  flex: 0 0 auto;
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  color: var(--gold);
+}
+
+.encounter-card {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--gold-line);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(circle at 100% 0, rgba(201, 162, 39, 0.1), transparent 60%),
+    var(--panel);
+}
+
+.encounter-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 9px;
+}
+
+.encounter-head h3 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--gold-bright);
+}
+
+.encounter-text {
+  margin: 0 0 12px;
+  font-size: 0.84rem;
+  line-height: 1.95;
+  color: #d8cdba;
+  white-space: pre-wrap;
+}
+
+.city-error {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(189, 92, 82, 0.45);
+  border-radius: var(--r-sm);
+  background: rgba(189, 92, 82, 0.08);
+  color: #e0a9a2;
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
   line-height: 1.7;
 }
 
-.city-map {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 5px;
-  margin-top: 8px;
-  padding: 6px;
-  border: 1px solid var(--dyn-line);
-  background:
-    linear-gradient(rgba(201, 162, 39, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(201, 162, 39, 0.03) 1px, transparent 1px),
-    #0d0b09;
-  background-size: 20px 20px;
+.log-row b {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--muted);
 }
 
-.city-ward {
-  min-width: 0;
-  min-height: 68px;
-  padding: 6px 5px;
-  border: 1px solid var(--dyn-line-soft);
-  background: rgba(20, 17, 14, 0.92);
-  color: var(--dyn-muted);
-  text-align: left;
-  white-space: normal;
+.log-row span {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--dim);
 }
 
-.city-ward.is-active { border-color: var(--dyn-gold); background: rgba(201, 162, 39, 0.1); }
-.city-ward b { display: block; font-size: 0.62rem; font-weight: 500; color: var(--dyn-text); }
-.city-ward small { display: block; margin-top: 1px; font-size: 0.48rem; line-height: 1.4; color: var(--dyn-dim); }
-.city-ward em { display: block; margin-top: 3px; color: var(--dyn-red); font-size: 0.46rem; font-style: normal; letter-spacing: 0.1em; }
-
-.city-panel,
-.city-encounter,
-.city-result,
-.city-impeach,
-.city-roster,
-.city-log {
-  margin-top: 8px;
-  padding: 10px;
-  border: 1px solid var(--dyn-line);
-  background: var(--dyn-panel);
-}
-
-.city-panel h3,
-.city-encounter h3,
-.city-impeach h3,
-.city-roster h3,
-.city-log h3 {
-  margin: 0;
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--dyn-gold-bright);
-}
-
-.city-panel p,
-.city-encounter p,
-.city-impeach p {
-  margin: 5px 0 0;
-  color: var(--dyn-muted);
-  font-size: 0.62rem;
-  line-height: 1.8;
-  overflow-wrap: anywhere;
-}
-
-.city-actions { display: grid; gap: 5px; margin-top: 8px; }
-
-.city-action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 7px;
-  width: 100%;
-  min-height: 46px;
-  padding: 7px 8px;
-  border: 1px solid var(--dyn-line-soft);
-  background: var(--dyn-panel-2);
-  color: var(--dyn-text);
-  text-align: left;
-}
-.city-action:disabled { opacity: 0.35; }
-.city-action b { display: block; font-size: 0.64rem; font-weight: 500; }
-.city-action small { display: block; margin-top: 1px; font-size: 0.5rem; color: var(--dyn-dim); }
-.city-action em { flex-shrink: 0; color: var(--dyn-gold); font-size: 0.5rem; font-style: normal; }
-
-.city-actor { display: flex; align-items: center; gap: 7px; }
-.city-avatar {
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--dyn-gold);
-  background: radial-gradient(circle at 35% 30%, #3a2d1c, #171310 70%);
-  color: var(--dyn-gold-bright);
-  font-size: 0.8rem;
-}
-.city-actor b { display: block; font-size: 0.66rem; color: var(--dyn-text); }
-.city-actor span { display: block; margin-top: 1px; color: var(--dyn-dim); font-size: 0.5rem; }
-.city-actor .city-tag { margin-left: auto; }
-
-.city-tag {
-  display: inline-flex;
-  padding: 1px 5px;
-  border: 1px solid var(--dyn-line);
-  color: var(--dyn-muted);
-  font-size: 0.48rem;
-}
-.city-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
-
-.city-choices { display: grid; gap: 5px; margin-top: 8px; }
-.city-choices button {
-  width: 100%;
-  min-height: 48px;
-  padding: 8px;
-  border: 1px solid var(--dyn-line);
-  border-left: 2px solid var(--dyn-gold);
-  background: var(--dyn-panel-2);
-  color: var(--dyn-text);
-  text-align: left;
-}
-.city-choices b { display: block; font-size: 0.64rem; font-weight: 500; }
-.city-choices small { display: block; margin-top: 1px; font-size: 0.5rem; color: var(--dyn-muted); }
-
-.city-result {
-  border-style: dashed;
-  background: rgba(201, 162, 39, 0.04);
-  color: #d8ccb9;
-  font-size: 0.62rem;
-  line-height: 1.8;
-}
-
-.city-error { margin: 6px 0 0; color: #d7857e; font-size: 0.56rem; }
-.city-empty { padding: 12px 0; text-align: center; color: var(--dyn-dim); font-size: 0.56rem; }
-
-.city-log-item {
-  padding: 5px 0;
-  border-bottom: 1px dashed var(--dyn-line-soft);
-  font-size: 0.54rem;
-  line-height: 1.6;
-  color: var(--dyn-muted);
-}
-.city-log-item:last-child { border-bottom: none; }
-.city-log-item b { display: block; color: var(--dyn-text); font-weight: 400; }
-.city-log-item span { display: block; margin-top: 1px; }
-
-.city-night-venues {
+.venue-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
+  gap: 8px;
 }
-.city-venue {
-  min-width: 0;
-  min-height: 62px;
-  padding: 7px;
-  border: 1px solid var(--dyn-line-soft);
-  background: var(--dyn-panel);
-  color: var(--dyn-muted);
+
+.venue {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--panel);
+  color: var(--text);
   text-align: left;
 }
-.city-venue.is-active { border-color: var(--dyn-violet, #8b7bb0); background: rgba(139, 123, 176, 0.1); }
-.city-venue b { display: block; font-size: 0.66rem; color: var(--dyn-text); font-weight: 500; }
-.city-venue small { display: block; margin-top: 1px; font-size: 0.48rem; color: var(--dyn-dim); }
 
-.city-performers { display: grid; gap: 5px; margin-top: 8px; }
-.city-performer {
+.venue.is-active {
+  border-color: var(--violet);
+  background:
+    radial-gradient(circle at 100% 0, rgba(154, 138, 192, 0.14), transparent 70%),
+    var(--panel);
+}
+
+.venue b {
+  font-size: 0.92rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.venue small {
+  font-family: var(--font-sans);
+  font-size: 0.66rem;
+  color: var(--dim);
+}
+
+.performer-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.performer {
   display: flex;
   align-items: center;
-  gap: 7px;
-  width: 100%;
-  min-width: 0;
-  padding: 7px;
-  border: 1px solid var(--dyn-line-soft);
-  background: var(--dyn-panel-2);
-  color: var(--dyn-muted);
-  text-align: left;
-}
-.city-performer.is-active { border-color: #8b7bb0; }
-.city-performer b { display: block; font-size: 0.64rem; color: var(--dyn-text); font-weight: 400; }
-.city-performer small { display: block; margin-top: 1px; font-size: 0.5rem; color: var(--dyn-dim); }
-
-.city-performer-detail {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--dyn-line-soft);
-}
-.city-performer-head b { display: block; font-size: 0.8rem; color: var(--dyn-gold-bright); font-weight: 500; }
-.city-performer-head span { display: block; margin-top: 1px; font-size: 0.52rem; color: var(--dyn-dim); }
-.city-performer-detail p { margin: 5px 0 0; font-size: 0.6rem; color: var(--dyn-muted); line-height: 1.8; }
-
-.city-roles { display: grid; gap: 5px; margin-top: 6px; }
-.city-role {
-  width: 100%;
-  min-height: 46px;
-  padding: 7px 8px;
-  border: 1px solid var(--dyn-line);
-  border-left: 2px solid #8b7bb0;
-  background: var(--dyn-panel-2);
-  color: var(--dyn-text);
-  text-align: left;
-}
-.city-role:disabled { opacity: 0.35; }
-.city-role b { display: block; font-size: 0.62rem; font-weight: 500; }
-.city-role small { display: block; margin-top: 1px; font-size: 0.5rem; color: var(--dyn-muted); }
-.city-role em { display: block; margin-top: 1px; color: #d7857e; font-size: 0.5rem; font-style: normal; }
-
-.city-extra-title {
-  margin-top: 10px;
-  padding-top: 7px;
-  border-top: 1px dashed var(--dyn-line-soft);
-  color: var(--dyn-gold);
-  font-size: 0.58rem;
-}
-
-.city-impeach { border-color: var(--dyn-red); background: rgba(176, 68, 60, 0.08); }
-.city-impeach h3 { color: #d7857e; }
-
-.city-roster-item {
-  display: flex;
-  justify-content: space-between;
   gap: 8px;
-  padding: 5px 0;
-  border-bottom: 1px dashed var(--dyn-line-soft);
-  font-size: 0.56rem;
-  color: var(--dyn-muted);
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(0, 0, 0, 0.16);
+  color: var(--text);
+  text-align: left;
 }
-.city-roster-item:last-child { border-bottom: none; }
-.city-roster-item b { color: var(--dyn-text); font-weight: 400; }
 
-.city-burden-strip {
-  flex-shrink: 0;
-  width: 100%;
-  min-height: 34px;
+.performer.is-active {
+  border-color: var(--gold-line);
+  background: rgba(201, 162, 39, 0.07);
+}
+
+.performer-main {
+  min-width: 0;
+}
+
+.performer-main b {
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 400;
+}
+
+.performer-main small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.performer-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.performer-head {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 3px;
-  padding: 4px 9px;
-  border: none;
-  border-bottom: 1px solid var(--dyn-line-soft);
-  background: #12100d;
-  color: var(--dyn-muted);
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.performer-head b {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.performer-detail > p {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.9;
+  color: var(--muted);
+}
+
+.performer-actions {
+  margin-top: 10px;
+}
+
+.role-grid {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+}
+
+.role {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 11px;
+  border: 1px solid var(--violet);
+  border-radius: var(--r-sm);
+  background: rgba(154, 138, 192, 0.07);
+  color: var(--text);
   text-align: left;
 }
 
-.city-burden-title {
-  color: var(--dyn-gold);
-  font-size: 0.54rem;
-  letter-spacing: 0.06em;
-  margin-right: 2px;
+.role:disabled {
+  opacity: 0.4;
+  border-color: var(--line);
 }
 
-.city-burden-chip {
-  padding: 1px 5px;
-  border: 1px solid var(--dyn-line);
-  font-size: 0.5rem;
+.role b {
+  font-size: 0.86rem;
+  font-weight: 500;
 }
 
-.city-burden-chip.is-trait {
-  border-color: rgba(139, 123, 176, 0.55);
-  color: #c3b6e0;
+.role small {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  color: var(--dim);
 }
 
-.city-burden-chip.is-debuff {
-  border-color: rgba(176, 68, 60, 0.55);
-  color: #d7857e;
+.role em {
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  font-style: normal;
+  color: var(--red);
 }
 
-.city-burden-empty { color: var(--dyn-dim); font-size: 0.5rem; }
-.city-burden-more { margin-left: auto; color: var(--dyn-gold); font-size: 0.52rem; }
-
-.city-burden-panel {
-  flex-shrink: 0;
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--dyn-line-soft);
-  background: var(--dyn-panel);
+.impeach {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid rgba(189, 92, 82, 0.5);
+  border-radius: var(--r-md);
+  background: rgba(189, 92, 82, 0.06);
 }
 
-.city-burden-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.56rem;
-  color: var(--dyn-muted);
+.impeach h3 {
+  margin: 0 0 6px;
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  color: #e0a9a2;
 }
 
-.city-burden-line b { color: var(--dyn-text); font-weight: 400; }
-
-.city-burden-meter {
-  height: 5px;
-  margin: 2px 0 5px;
-  border: 1px solid var(--dyn-line-soft);
-  background: #0d0b09;
+.impeach > p {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  line-height: 1.9;
+  color: var(--muted);
 }
 
-.city-burden-meter i { display: block; height: 100%; background: var(--dyn-red); }
-.city-burden-panel p { margin: 4px 0 0; font-size: 0.54rem; line-height: 1.6; color: var(--dyn-muted); }
-.city-burden-panel p b { color: var(--dyn-red); font-weight: 400; }
-.city-burden-warn { color: var(--dyn-gold) !important; }
-
-@media (max-width: 520px) {
-  .city-title b { font-size: 17px; }
-  .city-title span { font-size: 12px; }
-  .city-hud span { font-size: 12px; }
-  .city-burden-title, .city-burden-more { font-size: 12px; }
-  .city-burden-chip { font-size: 11px; padding: 2px 6px; }
-  .city-burden-empty { font-size: 11px; }
-  .city-burden-panel p, .city-burden-line { font-size: 12px; }
-  .city-tabs button, .city-mode button { font-size: 13px; min-height: 42px; }
-  .city-note { font-size: 12px; }
-  .city-ward b { font-size: 14px; }
-  .city-ward small { font-size: 11px; }
-  .city-ward em { font-size: 10px; }
-  .city-panel h3, .city-encounter h3, .city-impeach h3, .city-roster h3, .city-log h3 { font-size: 17px; }
-  .city-panel p, .city-encounter p, .city-impeach p { font-size: 13px; }
-  .city-action b { font-size: 14px; }
-  .city-action small, .city-action em { font-size: 12px; }
-  .city-action { min-height: 50px; }
-  .city-actions button b, .city-choices b { font-size: 14px; }
-  .city-choices small { font-size: 12px; }
-  .city-venue b, .city-performer b { font-size: 14px; }
-  .city-venue small, .city-performer small { font-size: 11px; }
-  .city-performer-head b { font-size: 17px; }
-  .city-performer-head span, .city-performer-detail p { font-size: 12px; }
-  .city-role b { font-size: 14px; }
-  .city-role small, .city-role em { font-size: 12px; }
-  .city-roster-item, .city-log-item { font-size: 12px; }
+.result-panel {
+  margin-top: 12px;
 }
 
-@media (max-width: 360px) {
-  .city-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .city-ward { min-height: 62px; }
-}
-
-/* ===== 桌面端：地图铺开成四列，正文限宽 ===== */
-
-@media (min-width: 1024px) {
-  .city-top { padding: 14px 20px; }
-
+@media (min-width: 560px) {
   .city-scroll {
-    padding: 20px 24px 32px;
+    padding: 16px 18px 32px;
   }
 
-  .city-scroll > * {
+  .city-head {
+    padding: 12px 18px;
+  }
+
+  .city-hud,
+  .city-tabs,
+  .burden-strip,
+  .burden-panel {
+    margin-left: 18px;
+    margin-right: 18px;
+  }
+
+  .ward-grid,
+  .venue-grid,
+  .performer-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .city-scroll {
     width: 100%;
-    max-width: 1100px;
+    max-width: 940px;
     margin: 0 auto;
+    padding: 20px 24px 40px;
   }
 
-  .city-map {
+  .city-hud,
+  .city-tabs,
+  .burden-strip,
+  .burden-panel {
+    width: 100%;
+    max-width: 892px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .ward-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
   }
 
-  .city-ward { min-height: 96px; }
+  .performer-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 
-  .city-actions { gap: 8px; }
-
-  .city-action:hover { background: rgba(201, 162, 39, 0.06); }
+  .role-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 </style>

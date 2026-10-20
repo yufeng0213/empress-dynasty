@@ -97,13 +97,15 @@ cp .env.example .env
 vi .env
 ```
 
-至少要改这三行：
+可以在这里填一组固定配置：
 
 ```ini
 LLM_API_BASE=https://api.deepseek.com/v1
 LLM_API_KEY=sk-你的密钥
 LLM_MODEL=deepseek-chat
 ```
+
+也可以全部留空，启动后在网页右上「AI 设置」里保存多套配置并切换，效果相同而且不用重建容器。
 
 `LLM_API_BASE` 只填到 `/v1` 就行，服务端会自动补 `/chat/completions`；填完整地址也可以。
 
@@ -118,6 +120,8 @@ LLM_MODEL=deepseek-chat
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
 
 > 密钥只存在服务器上，不会进浏览器，也不会进 git（`.env` 已在 `.gitignore` 里）。
+>
+> 在网页里保存的配置写在 `data/llm-profiles.json`（同样只在服务器），页面只显示 `sk-••••` 这样的掩码；新增、切换、测试都即时生效。
 
 ---
 
@@ -174,13 +178,19 @@ curl http://127.0.0.1:3001/api/health
 ```json
 {
   "ok": true,
-  "llm": { "configured": true, "model": "deepseek-chat", "endpoint": "..." },
+  "llm": {
+    "configured": true,
+    "profileId": "llm_xxx",
+    "name": "主力模型",
+    "model": "deepseek-chat",
+    "endpoint": "..."
+  },
   "storage": "/data/kv.json",
   "uptime": 12
 }
 ```
 
-`llm.configured` 是 `false` 说明 `.env` 没生效，改完要 `docker compose up -d` 重建容器（不是 `restart`）。
+`llm.configured` 是 `false` 时：先看网页「设置 · AI 接口」里是否有已启用的配置；如果用的是 `.env`，改完要 `docker compose up -d` 重建容器（不是 `restart`）。
 
 ---
 
@@ -404,7 +414,8 @@ docker compose up -d --build
 docker compose logs --tail=50
 ```
 
-- `服务器未配置 LLM_API_KEY` → `.env` 没写或用了 `restart` 而不是 `up -d`
+- `尚未配置 AI 接口` → 网页「设置 · AI 接口」里还没有启用任何配置；用 `.env` 的话确认写了 Key 并用 `up -d` 重建容器
+- `配置「xxx」缺少 API Key` → 该配置保存时没带上密钥，编辑后重新填写
 - `上游接口失败 401` → Key 错了
 - `上游接口失败 404` → `LLM_API_BASE` 路径不对，确认能拼出 `/chat/completions`
 - `生成超时` → 服务器访问不了该接口，先在容器里测：

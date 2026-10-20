@@ -1,11 +1,11 @@
 <template>
-  <div class="dyn-radar" :style="{ width: `${size}px` }">
+  <div class="radar" :style="{ width: `${size}px` }">
     <svg :viewBox="`0 0 ${size} ${size}`" role="img" aria-label="人物能力雷达图">
       <polygon
         v-for="(ring, index) in rings"
         :key="`ring-${index}`"
         :points="ring"
-        class="dyn-radar-ring"
+        class="ring"
       />
       <line
         v-for="axis in axes"
@@ -14,20 +14,20 @@
         :y1="center"
         :x2="axis.x"
         :y2="axis.y"
-        class="dyn-radar-axis"
+        class="axis"
       />
-      <polygon :points="dataPoints" class="dyn-radar-area" />
+      <polygon :points="dataPoints" class="area" />
       <circle
         v-for="axis in axes"
         :key="`node-${axis.key}`"
         :cx="axis.px"
         :cy="axis.py"
         r="2.6"
-        class="dyn-radar-node"
+        class="node"
       />
       <g v-for="axis in axes" :key="`label-${axis.key}`">
-        <text :x="axis.lx" :y="axis.ly" class="dyn-radar-label">{{ axis.label }}</text>
-        <text :x="axis.lx" :y="axis.ly + 13" class="dyn-radar-value">{{ axis.value }}</text>
+        <text :x="axis.lx" :y="axis.ly" class="label">{{ axis.label }}</text>
+        <text :x="axis.lx" :y="axis.ly + 13" class="value">{{ axis.value }}</text>
       </g>
     </svg>
   </div>
@@ -48,7 +48,7 @@ const props = defineProps({
 
 const center = computed(() => props.size / 2)
 const radius = computed(() => props.size * 0.31)
-const labelRadius = computed(() => props.size * 0.42)
+const labelRadius = computed(() => props.size * 0.43)
 
 const stats = computed(() => getAbilityStats(props.person))
 
@@ -80,50 +80,52 @@ const rings = computed(() => [0.2, 0.4, 0.6, 0.8, 1].map((ratio) => (
 </script>
 
 <style scoped>
-.dyn-radar {
+.radar {
   max-width: 100%;
-  margin: 6px auto 2px;
+  margin: 4px auto 2px;
 }
 
-.dyn-radar svg {
+.radar svg {
   display: block;
   width: 100%;
   height: auto;
   overflow: visible;
 }
 
-.dyn-radar-ring {
+.ring {
   fill: none;
+  stroke: rgba(201, 162, 39, 0.14);
+  stroke-width: 0.8;
+}
+
+.axis {
   stroke: rgba(201, 162, 39, 0.16);
   stroke-width: 0.8;
 }
 
-.dyn-radar-axis {
-  stroke: rgba(201, 162, 39, 0.18);
-  stroke-width: 0.8;
+.area {
+  fill: rgba(201, 162, 39, 0.16);
+  stroke: var(--gold, #c9a227);
+  stroke-width: 1.3;
 }
 
-.dyn-radar-area {
-  fill: rgba(201, 162, 39, 0.2);
-  stroke: #c9a227;
-  stroke-width: 1.4;
+.node {
+  fill: var(--gold-bright, #ecd596);
 }
 
-.dyn-radar-node {
-  fill: #e6c96a;
-}
-
-.dyn-radar-label {
-  fill: #cbbfae;
+.label {
+  fill: #a39681;
   font-size: 11px;
+  font-family: var(--font-serif, serif);
   letter-spacing: 0.08em;
   text-anchor: middle;
   dominant-baseline: middle;
 }
 
-.dyn-radar-value {
-  fill: #e6c96a;
+.value {
+  fill: var(--gold-bright, #ecd596);
   font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-anchor: middle;
   dominant-baseline: middle;
 }
