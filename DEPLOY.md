@@ -144,6 +144,8 @@ docker compose logs -f
 
 浏览器打开 `http://服务器IP:3001`。
 
+> 这里必须带 `:3001`。想用域名直接访问、不带端口号，见第 7 节。
+
 ---
 
 ## 5. 放行端口
@@ -156,6 +158,8 @@ sudo ufw allow 3001/tcp
 ```
 
 阿里云、腾讯云、AWS 还要在控制台的「安全组」里加一条入站规则，否则外面访问不到。
+
+如果后面按第 7 节改用 80 端口或加了反向代理，放行规则要跟着改：纯 80 访问放行 `80/tcp`，上了 HTTPS 就放行 `80/tcp` 和 `443/tcp`，此时 3001 只绑本机，不需要对外。
 
 ---
 
@@ -182,18 +186,54 @@ curl http://127.0.0.1:3001/api/health
 
 ## 7. 配域名和 HTTPS（建议）
 
-手机上加到主屏幕、自动播放音频这些功能在 HTTP 下会被浏览器限制，有域名的话最好配上。用 Caddy 两行搞定。
+先说清楚端口这件事：**域名只负责把名字解析到 IP，不改变端口**。浏览器在你不写端口时，默认连 80（http）或 443（https）。
 
-先让容器只监听本机，避免 3001 直接暴露到公网。编辑 `docker-compose.yml`：
+游戏默认监听 3001，所以开箱状态是：
+
+- `http://你的域名:3001` ✅ 能打开
+- `http://你的域名` ❌ 打不开（浏览器去连 80，那里没有服务）
+
+想直接输域名就进游戏，三选一。
+
+### 7.1 最省事：把容器映射到 80
+
+编辑 `docker-compose.yml`，改端口映射：
+
+```yaml
+    ports:
+      - "80:3001"
+```
+
+```bash
+docker compose up -d
+```
+
+之后访问 `http://你的域名` 即可。
+
+限制：只有 HTTP，没有证书；如果服务器上已经有 Nginx / Apache 占着 80，会报 `port is already allocated` 起不来。手机上「添加到主屏幕」「音频自动播放」在纯 HTTP 下会被浏览器限制。
+
+### 7.2 推荐：Caddy 反向代理 + 自动 HTTPS
+
+服务继续待在 3001，但只绑本机；公网只暴露 80/443 给 Caddy。
+
+**第一步**，改 `docker-compose.yml`，让 3001 不对外：
 
 ```yaml
     ports:
       - "127.0.0.1:3001:3001"
 ```
 
-然后 `docker compose up -d`。
+```bash
+docker compose up -d
+```
 
-在服务器上装 Caddy（用 Docker 跑也行）：
+**第二步**，域名 A 记录指向服务器 IP，确认已生效：
+
+```bash
+ping 你的域名        # 返回服务器 IP 就对了
+```
+
+**第三步**，安装 Caddy：
 
 ```bash
 sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
@@ -202,7 +242,7 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo 
 sudo apt update && sudo apt install caddy
 ```
 
-编辑 `/etc/caddy/Caddyfile`：
+**第四步**，编辑 `/etc/caddy/Caddyfile`（把域名换成你自己的）：
 
 ```
 dynasty.example.com {
@@ -214,7 +254,52 @@ dynasty.example.com {
 sudo systemctl reload caddy
 ```
 
-域名 A 记录指向服务器 IP，Caddy 会自动申请并续期 Let's Encrypt 证书。之后访问 `https://dynasty.example.com` 即可。
+之后访问 `https://dynasty.example.com`。证书自动申请、自动续期，不用管。
+
+**安全组 / 防火墙要放行 80 和 443**，否则申请证书会失败：
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+```
+
+### 7.3 服务器上已经有 Nginx
+
+80/443 已被别的站点占用，就别再装 Caddy 了，加一个站点即可。
+
+新建 `/etc/nginx/sites-available/dynasty`：
+
+```nginx
+server {
+    listen 80;
+    server_name 你的域名;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # AI 生成一段长剧情可能要一两分钟，别让它中途超时断开
+        proxy_read_timeout 180s;
+        proxy_send_timeout 180s;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/dynasty /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d 你的域名
+```
+
+certbot 会自动配置好 443 和 HTTP 跳转。
+
+> `proxy_read_timeout` 一定要调大。Nginx 默认 60 秒，遇到长剧情生成会返回 504，看起来就像 AI 挂了。
 
 ---
 
