@@ -365,25 +365,29 @@ example.com {
 
 ## 8. 存档备份
 
-存档就是宿主机上的一个 JSON 文件：`/opt/empress-dynasty/data/kv.json`。
+存档就是宿主机上的一个 JSON 文件：`/opt/empress-dynasty/data/kv.json`；AI 配置在 `data/llm-profiles.json`，立绘在 `data/portraits/`。
 
 ```bash
 # 备份
 cp data/kv.json ~/dynasty-backup-$(date +%F).json
+cp data/llm-profiles.json ~/dynasty-llm-$(date +%F).json
+cp -r data/portraits ~/dynasty-portraits-$(date +%F)
 
 # 恢复
 cp ~/dynasty-backup-2026-10-20.json data/kv.json
+cp ~/dynasty-llm-2026-10-20.json data/llm-profiles.json
+cp -r ~/dynasty-portraits-2026-10-20/. data/portraits/
 docker compose restart
 ```
 
-建议加一条定时任务，每天备份一次，保留 7 天：
+建议加一条定时任务，每天备份存档与配置，保留 7 天：
 
 ```bash
 crontab -e
 ```
 
 ```cron
-0 4 * * * cd /opt/empress-dynasty && mkdir -p backup && cp data/kv.json backup/kv-$(date +\%F).json && find backup -name 'kv-*.json' -mtime +7 -delete
+0 4 * * * cd /opt/empress-dynasty && mkdir -p backup && cp data/kv.json backup/kv-$(date +\%F).json && cp data/llm-profiles.json backup/llm-$(date +\%F).json && cp -r data/portraits backup/portraits-$(date +\%F) && find backup -name 'kv-*.json' -mtime +7 -delete
 ```
 
 > 多台设备之间共享同一份存档，因为存档在服务器上，不在浏览器里。两个人同时玩会互相覆盖，自己玩没问题。

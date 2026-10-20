@@ -11,7 +11,14 @@ import { llmConfigApi } from '../game/llmConfig.js'
 import CharacterRadar from './CharacterRadar.vue'
 import ChatScreen from './ChatScreen.vue'
 import CityScreen from './CityScreen.vue'
+import PortraitLightbox from './PortraitLightbox.vue'
+import PortraitScreen from './PortraitScreen.vue'
 import SettingsScreen from './SettingsScreen.vue'
+import {
+  displayPortraitFor,
+  loadPortraitLibrary,
+} from '../game/portraitStore.js'
+import { portraitUrl } from '../game/portraits.js'
 import {
   RESOURCE_KEYS,
   RESOURCE_LABELS,
@@ -195,6 +202,7 @@ const SIDE_SECONDARY = [
   { key: 'treasury', label: '国库', glyph: '库' },
   { key: 'event-pool', label: '事件池', glyph: '事' },
   { key: 'names', label: '名号', glyph: '号' },
+  { key: 'portraits', label: '立绘', glyph: '绘' },
   { key: 'settings', label: '设置', glyph: '设' },
 ]
 
@@ -208,6 +216,7 @@ const MORE_ITEMS = [
   { key: 'chronicle', label: '编年史', desc: '逐月记录' },
   { key: 'event-pool', label: '事件池', desc: '停用不想再看到的事件' },
   { key: 'names', label: '王朝名号', desc: '国号 · 年号 · 君主名' },
+  { key: 'portraits', label: '立绘库', desc: '导图 · 切图 · 分配大图' },
   { key: 'settings', label: '设置', desc: 'AI 接口 · 多套配置切换' },
 ]
 
@@ -233,6 +242,7 @@ const VIEW_TITLES = {
   treasury: '国库',
   'event-pool': '事件池',
   names: '名号',
+  portraits: '立绘库',
   chat: '召见',
   settings: '设置',
   select: '女帝 · 王朝',
@@ -431,6 +441,7 @@ const navActive = computed(() => {
   if (view.value === 'treasury') return 'treasury'
   if (view.value === 'event-pool') return 'event-pool'
   if (view.value === 'names') return 'names'
+  if (view.value === 'portraits') return 'portraits'
   if (view.value === 'settings') return 'settings'
   return ''
 })
@@ -500,6 +511,11 @@ const avatarSrc = (person, thumb = false) => {
   return `/data/dynasty/avatars/${genderKey}/${file}`
 }
 
+// 优先用立绘库分配的大图；没分配时用稳定预览；再退回内置头像，最后显示姓氏首字
+const portraitOf = (person, thumb = false) => (
+  displayPortraitFor(activeRun.value?.id, person) || avatarSrc(person, thumb)
+)
+
 const isPregnant = (consortId) => (
   (activeRun.value?.pregnancies || []).some((item) => item.carrierId === consortId)
 )
@@ -548,6 +564,69 @@ const roleClass = (person) => {
   if (person?.role === 'consort') return 'avatar-consort'
   if (person?.role === 'servant') return 'avatar-inner'
   return ''
+}
+
+/* ===== 立绘 ===== */
+
+const portraitTargetId = ref('')
+const portraitReturnView = ref('people')
+const portraitLightbox = ref(null)
+
+const openPortraitManager = (person = null) => {
+  portraitLightbox.value = null
+  portraitTargetId.value = person?.id || ''
+  portraitReturnView.value = view.value || (person ? 'person' : 'people')
+  view.value = 'portraits'
+  scrollTop()
+}
+
+const closePortraitManager = () => {
+  const back = portraitReturnView.value || 'people'
+  portraitTargetId.value = ''
+  view.value = back === 'portraits' ? 'people' : back
+  scrollTop()
+}
+
+const handlePortraitPicked = () => {
+  message.value = '已更换立绘'
+  const back = portraitReturnView.value || 'person'
+  portraitTargetId.value = ''
+  view.value = back === 'portraits' ? 'person' : back
+  scrollTop()
+}
+
+const openPortraitLightbox = (person) => {
+  if (!person) return
+  const url = displayPortraitFor(activeRun.value?.id, person)
+  if (!url) {
+    openPortraitManager(person)
+    return
+  }
+  const run = activeRun.value
+  const canAssign = Boolean(
+    run && (run.ruler?.id === person.id || run.characters?.some((item) => item.id === person.id)),
+  )
+  portraitLightbox.value = {
+    url,
+    name: person.name,
+    characterId: person.id,
+    canAssign,
+    initial: person.name?.slice(0, 1) || '',
+    subtitle: [person.office || person.roleLabel, person.age ? `${person.age} 岁` : '']
+      .filter(Boolean)
+      .join(' · '),
+  }
+}
+
+const changePortraitFromLightbox = () => {
+  const info = portraitLightbox.value
+  const run = activeRun.value
+  if (!info?.characterId || !run) return
+  const person = run.ruler?.id === info.characterId
+    ? run.ruler
+    : run.characters?.find((item) => item.id === info.characterId)
+  portraitLightbox.value = null
+  if (person) openPortraitManager(person)
 }
 
 const scrollTop = () => {
@@ -1421,6 +1500,7 @@ const handleBack = () => {
   if (view.value === 'appointment') return go('people')
   if (view.value === 'exam') return go('people')
   if (view.value === 'regions') return go('people')
+  if (view.value === 'portraits') return closePortraitManager()
   if (activeRun.value?.status === 'succession') {
     view.value = succession.value?.winnerId ? 'succession' : 'struggle'
     showMoreMenu.value = false
@@ -1449,6 +1529,7 @@ watch(message, (value) => {
 onMounted(() => {
   void loadRuns()
   void loadLlmInfo()
+  void loadPortraitLibrary()
 })
 
 onBeforeUnmount(() => {
@@ -1725,6 +1806,15 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <!-- ===== 立绘库 ===== -->
+        <PortraitScreen
+          v-else-if="view === 'portraits'"
+          :run="activeRun"
+          :target-id="portraitTargetId"
+          @back="closePortraitManager"
+          @picked="handlePortraitPicked"
+        />
+
         <!-- ===== 设置 ===== -->
         <div v-else-if="view === 'settings'" class="settings-wrap">
           <SettingsScreen @back="closeSettings" @changed="loadLlmInfo" />
@@ -1751,8 +1841,15 @@ onBeforeUnmount(() => {
           <!-- 朝堂 -->
           <div v-else-if="view === 'court'" class="page court">
             <section class="ruler-card">
-              <div class="avatar avatar-lg ruler-avatar" :class="{ 'avatar-dead': ruler?.health <= 0 }">
-                <img v-if="avatarOk(avatarSrc(ruler))" :src="avatarSrc(ruler)" alt="" @error="onAvatarError(avatarSrc(ruler))" />
+              <div
+                class="avatar avatar-lg ruler-avatar is-clickable"
+                :class="{ 'avatar-dead': ruler?.health <= 0 }"
+                role="button"
+                tabindex="0"
+                @click="openPortraitLightbox(ruler)"
+                @keydown.enter="openPortraitLightbox(ruler)"
+              >
+                <img v-if="avatarOk(portraitOf(ruler))" :src="portraitOf(ruler)" :alt="ruler?.name" @error="onAvatarError(portraitOf(ruler))" />
                 <template v-else>{{ (ruler?.name || '帝').slice(0, 1) }}</template>
               </div>
               <div class="ruler-main">
@@ -2031,8 +2128,8 @@ onBeforeUnmount(() => {
                 :class="{ 'is-dead': person.alive === false }"
                 @click="openPerson(person)"
               >
-                <div class="avatar avatar-sm" :class="[roleClass(person), { 'avatar-dead': person.alive === false }]">
-                  <img v-if="avatarOk(avatarSrc(person, true))" :src="avatarSrc(person, true)" alt="" loading="lazy" @error="onAvatarError(avatarSrc(person, true))" />
+                <div class="avatar avatar-portrait" :class="[roleClass(person), { 'avatar-dead': person.alive === false }]">
+                  <img v-if="avatarOk(portraitOf(person, true))" :src="portraitOf(person, true)" alt="" loading="lazy" @error="onAvatarError(portraitOf(person, true))" />
                   <template v-else>{{ person.name.slice(0, 1) }}</template>
                 </div>
                 <div class="person-main">
@@ -2070,13 +2167,28 @@ onBeforeUnmount(() => {
           <div v-else-if="view === 'person' && currentPerson" class="page person-page">
             <section class="person-hero">
               <div
-                class="avatar avatar-lg"
-                :class="[roleClass(currentPerson), { 'avatar-dead': currentPerson.alive === false }]"
+                class="portrait-frame"
+                :class="{ 'is-empty': !avatarOk(portraitOf(currentPerson)), 'is-dead': currentPerson.alive === false }"
+                role="button"
+                tabindex="0"
+                @click="openPortraitLightbox(currentPerson)"
+                @keydown.enter="openPortraitLightbox(currentPerson)"
               >
-                <img v-if="avatarOk(avatarSrc(currentPerson))" :src="avatarSrc(currentPerson)" alt="" @error="onAvatarError(avatarSrc(currentPerson))" />
-                <template v-else>{{ currentPerson.name.slice(0, 1) }}</template>
+                <img
+                  v-if="avatarOk(portraitOf(currentPerson))"
+                  :src="portraitOf(currentPerson)"
+                  :alt="currentPerson.name"
+                  @error="onAvatarError(portraitOf(currentPerson))"
+                />
+                <span v-else class="portrait-initial">{{ currentPerson.name.slice(0, 1) }}</span>
+                <span class="portrait-shade"></span>
+                <span class="portrait-name">{{ currentPerson.name }}</span>
+                <button type="button" class="portrait-change" @click.stop="openPortraitManager(currentPerson)">
+                  更换立绘
+                </button>
               </div>
               <div class="person-hero-main">
+                <p class="eyebrow">{{ currentPerson.office || currentPerson.roleLabel }}</p>
                 <h1>{{ currentPerson.name }}</h1>
                 <p class="person-hero-sub">
                   {{ currentPerson.office }} · {{ currentPerson.age }} 岁
@@ -2399,7 +2511,7 @@ onBeforeUnmount(() => {
             <div v-if="pregnancies.length" class="pregnancy-list">
               <div v-for="item in pregnancies" :key="item.id" class="pregnancy">
                 <div class="avatar avatar-sm avatar-consort">
-                  <img v-if="avatarOk(avatarSrc(item.carrier, true))" :src="avatarSrc(item.carrier, true)" alt="" loading="lazy" @error="onAvatarError(avatarSrc(item.carrier, true))" />
+                  <img v-if="avatarOk(portraitOf(item.carrier, true))" :src="portraitOf(item.carrier, true)" alt="" loading="lazy" @error="onAvatarError(portraitOf(item.carrier, true))" />
                   <template v-else>{{ item.carrier?.name?.slice(0, 1) || '孕' }}</template>
                 </div>
                 <div class="pregnancy-main">
@@ -2417,8 +2529,14 @@ onBeforeUnmount(() => {
             <p v-if="consorts.length === 0" class="empty">后宫无人。</p>
             <div v-else class="harem-list">
               <div v-for="person in consorts" :key="person.id" class="harem-row">
-                <div class="avatar avatar-sm avatar-consort">
-                  <img v-if="avatarOk(avatarSrc(person, true))" :src="avatarSrc(person, true)" alt="" loading="lazy" @error="onAvatarError(avatarSrc(person, true))" />
+                <div
+                  class="avatar avatar-portrait avatar-consort is-clickable"
+                  role="button"
+                  tabindex="0"
+                  @click="openPortraitLightbox(person)"
+                  @keydown.enter="openPortraitLightbox(person)"
+                >
+                  <img v-if="avatarOk(portraitOf(person, true))" :src="portraitOf(person, true)" alt="" loading="lazy" @error="onAvatarError(portraitOf(person, true))" />
                   <template v-else>{{ person.name.slice(0, 1) }}</template>
                 </div>
                 <div class="harem-main">
@@ -2571,11 +2689,18 @@ onBeforeUnmount(() => {
               <div class="section"><span>{{ appointment.vacancyOffice }} · 候选人</span></div>
               <div class="candidate-grid">
                 <section v-for="candidate in appointmentCandidates" :key="candidate.id" class="card candidate-card">
+                  <div
+                    class="candidate-art"
+                    role="button"
+                    tabindex="0"
+                    @click="openPortraitLightbox(candidate)"
+                    @keydown.enter="openPortraitLightbox(candidate)"
+                  >
+                    <img v-if="avatarOk(portraitOf(candidate))" :src="portraitOf(candidate)" :alt="candidate.name" loading="lazy" @error="onAvatarError(portraitOf(candidate))" />
+                    <span v-else class="candidate-initial">{{ candidate.name.slice(0, 1) }}</span>
+                    <span class="candidate-art-hint">点击看大图</span>
+                  </div>
                   <div class="candidate-head">
-                    <div class="avatar avatar-sm">
-                      <img v-if="avatarOk(avatarSrc(candidate, true))" :src="avatarSrc(candidate, true)" alt="" loading="lazy" @error="onAvatarError(avatarSrc(candidate, true))" />
-                      <template v-else>{{ candidate.name.slice(0, 1) }}</template>
-                    </div>
                     <div>
                       <div class="row-title">{{ candidate.name }} <span class="chip">{{ candidate.gender }} · {{ candidate.age }} 岁</span></div>
                       <div class="row-sub">{{ (candidate.tags || []).join('、') }}</div>
@@ -2612,8 +2737,18 @@ onBeforeUnmount(() => {
             <p v-if="selectionCandidates.length === 0" class="empty">名册已空。</p>
             <div class="candidate-grid">
               <section v-for="candidate in selectionCandidates" :key="candidate.id" class="card candidate-card">
+                <div
+                  class="candidate-art"
+                  role="button"
+                  tabindex="0"
+                  @click="openPortraitLightbox(candidate)"
+                  @keydown.enter="openPortraitLightbox(candidate)"
+                >
+                  <img v-if="avatarOk(portraitOf(candidate))" :src="portraitOf(candidate)" :alt="candidate.name" loading="lazy" @error="onAvatarError(portraitOf(candidate))" />
+                  <span v-else class="candidate-initial">{{ candidate.name.slice(0, 1) }}</span>
+                  <span class="candidate-art-hint">点击看大图</span>
+                </div>
                 <div class="candidate-head">
-                  <div class="avatar avatar-sm">{{ candidate.name.slice(0, 1) }}</div>
                   <div>
                     <div class="row-title">{{ candidate.name }} <span class="chip">{{ candidate.gender }} · {{ candidate.age }} 岁</span></div>
                     <div class="row-sub">{{ candidate.office }} · {{ (candidate.tags || []).join('、') }}</div>
@@ -2779,7 +2914,7 @@ onBeforeUnmount(() => {
                   @click="handlePalaceRoom(room)"
                 >
                   <span class="room-portrait">
-                    <img v-if="avatarOk(avatarSrc(room.resident))" :src="avatarSrc(room.resident)" alt="" @error="onAvatarError(avatarSrc(room.resident))" />
+                    <img v-if="avatarOk(portraitOf(room.resident))" :src="portraitOf(room.resident)" alt="" @error="onAvatarError(portraitOf(room.resident))" />
                     <template v-else>{{ room.resident ? room.resident.name.slice(0, 1) : room.name.slice(0, 1) }}</template>
                   </span>
                   <span class="room-body">
@@ -2802,8 +2937,15 @@ onBeforeUnmount(() => {
             <template v-else>
               <button type="button" class="link-btn back-link" @click="closeTravelDetail">‹ 返回宫室</button>
 
-              <section class="room-hero">
-                <img v-if="avatarOk(avatarSrc(palaceRoomResident))" :src="avatarSrc(palaceRoomResident)" alt="" @error="onAvatarError(avatarSrc(palaceRoomResident))" />
+              <section
+                class="room-hero"
+                :class="{ 'is-clickable': palaceRoomResident }"
+                role="button"
+                :tabindex="palaceRoomResident ? 0 : -1"
+                @click="palaceRoomResident && openPortraitLightbox(palaceRoomResident)"
+                @keydown.enter="palaceRoomResident && openPortraitLightbox(palaceRoomResident)"
+              >
+                <img v-if="avatarOk(portraitOf(palaceRoomResident))" :src="portraitOf(palaceRoomResident)" alt="" @error="onAvatarError(portraitOf(palaceRoomResident))" />
                 <div v-else class="room-hero-fallback">{{ palaceRoom.name.slice(0, 1) }}</div>
                 <div class="room-hero-shade"></div>
                 <div class="room-hero-body">
@@ -2856,7 +2998,7 @@ onBeforeUnmount(() => {
             <div v-if="palaceEncounter" class="encounter-card">
               <div class="encounter-head">
                 <div class="avatar avatar-sm">
-                  <img v-if="avatarOk(avatarSrc(palaceActorCharacter))" :src="avatarSrc(palaceActorCharacter)" alt="" @error="onAvatarError(avatarSrc(palaceActorCharacter))" />
+                  <img v-if="avatarOk(portraitOf(palaceActorCharacter))" :src="portraitOf(palaceActorCharacter)" alt="" @error="onAvatarError(portraitOf(palaceActorCharacter))" />
                   <template v-else>{{ palaceEncounter.actor?.name?.slice(0, 1) }}</template>
                 </div>
                 <div>
@@ -3133,6 +3275,26 @@ onBeforeUnmount(() => {
         <p class="note more-note">当前 AI：{{ llmInfo.configured ? `${llmInfo.name} · ${llmInfo.model}` : '未配置，使用本地模板' }}</p>
       </div>
     </div>
+
+    <PortraitLightbox
+      v-if="portraitLightbox"
+      :url="portraitLightbox.url"
+      :name="portraitLightbox.name"
+      :subtitle="portraitLightbox.subtitle"
+      :initial="portraitLightbox.initial"
+      @close="portraitLightbox = null"
+    >
+      <template #actions>
+        <button
+          v-if="portraitLightbox.canAssign"
+          type="button"
+          class="btn btn-ghost btn-sm"
+          @click="changePortraitFromLightbox"
+        >
+          更换立绘
+        </button>
+      </template>
+    </PortraitLightbox>
 
     <transition name="toast">
       <button v-if="message" type="button" class="toast" @click="message = ''">{{ message }}</button>

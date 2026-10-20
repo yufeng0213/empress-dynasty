@@ -431,6 +431,24 @@ img {
   opacity: 0.5;
 }
 
+/* 立绘缩略：比圆形头像更适合展示半身像 */
+.avatar-portrait {
+  width: 54px;
+  height: 66px;
+  border-radius: var(--r-sm);
+  background:
+    radial-gradient(circle at 32% 22%, #3a2d1c, #15110e 74%);
+}
+
+.avatar-portrait > img {
+  object-position: center 14%;
+}
+
+.avatar.is-clickable,
+.is-clickable {
+  cursor: zoom-in;
+}
+
 /* ============================== 表单 ============================== */
 
 .field {

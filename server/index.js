@@ -18,6 +18,15 @@ import {
   updateProfile,
 } from './llm-config.js'
 import { kvStore, storePath } from './store.js'
+import {
+  addPortraits,
+  findPortrait,
+  listPortraits,
+  portraitPath,
+  portraitsPath,
+  removePortrait,
+  updatePortrait,
+} from './portraits.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
@@ -162,6 +171,43 @@ app.post('/api/chat', async (req, res) => {
     + (result.success ? '' : ` :: ${result.error}`),
   )
 
+  res.json(result)
+})
+
+/* ===== 立绘库 ===== */
+
+app.get('/api/portraits', (req, res) => {
+  const portraits = listPortraits()
+  res.json({ ok: true, portraits, count: portraits.length, storagePath: portraitsPath() })
+})
+
+app.get('/api/portraits/:id/file', (req, res) => {
+  const item = findPortrait(req.params.id)
+  if (!item) return res.status(404).end()
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+  res.sendFile(portraitPath(item), (error) => {
+    if (error && !res.headersSent) res.status(404).end()
+  })
+})
+
+app.post('/api/portraits', (req, res) => {
+  const body = req.body || {}
+  const items = Array.isArray(body.items) ? body.items : [body]
+  if (!items.length) return res.status(400).json({ ok: false, error: '没有收到图片' })
+  const result = addPortraits(items)
+  if (!result.ok) return res.status(400).json(result)
+  res.json({ ...result, count: listPortraits().length })
+})
+
+app.put('/api/portraits/:id', (req, res) => {
+  const result = updatePortrait(req.params.id, req.body || {})
+  if (!result.ok) return res.status(400).json(result)
+  res.json(result)
+})
+
+app.delete('/api/portraits/:id', (req, res) => {
+  const result = removePortrait(req.params.id)
+  if (!result.ok) return res.status(400).json(result)
   res.json(result)
 })
 

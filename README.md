@@ -3,7 +3,8 @@
 多代宫廷经营：治国、纳宠、生育、立储、继承。从 Android 版 `feature-dynasty` 插件独立出来的网页版本。
 
 - 前端：Vue 3 + Vite，单页应用，手机 / 平板 / 桌面自适应
-- 后端：Node + Express，一个进程同时负责静态资源、LLM 代理、存档读写
+- 后端：Node + Express，一个进程同时负责静态资源、LLM 代理、存档读写、立绘库
+- 立绘：支持导入多格拼图、浏览器内切分、按人物分配、全屏看大图
 - 部署：单容器 Docker + 一个数据卷
 
 ## 为什么要有后端
@@ -22,15 +23,21 @@
 │  ├─ game-core/empire/   # 游戏引擎（纯 JS，无框架依赖，从原项目原样迁移）
 │  ├─ game/llm.js         # 提示词与 AI 调用（只负责写文字，数值永远本地结算）
 │  ├─ game/llmConfig.js   # 前端 AI 配置客户端（只读写掩码，不接触密钥）
+│  ├─ game/portraits.js   # 立绘库接口与图片地址
+│  ├─ game/portraitStore.js # 立绘分配、自动分配、稳定预览
+│  ├─ game/sliceSheet.js  # 浏览器内切分多格拼图
 │  ├─ storage/kv.js       # 存储层，接口与原 Android 版一致，内部改走服务端
-│  ├─ views/              # 王朝主界面、召见、京城、AI 设置、雷达图
+│  ├─ views/              # 王朝主界面、召见、京城、AI 设置、立绘库、雷达图
 │  ├─ App.vue
 │  └─ main.js
 ├─ server/
-│  ├─ index.js            # 路由：静态资源 / api/kv / api/chat / api/llm
+│  ├─ index.js            # 路由：静态资源 / api/kv / api/chat / api/llm / api/portraits
 │  ├─ llm.js              # LLM 代理
 │  ├─ llm-config.js       # 多套接口配置的存取与掩码
+│  ├─ portraits.js        # 立绘文件与 index.json
 │  └─ store.js            # 存档原子写
+├─ scripts/
+│  └─ slice_portrait_sheets.py # 本地批量切图（可选，需要 Pillow）
 ├─ Dockerfile
 ├─ docker-compose.yml
 ├─ DEPLOY.md              # 完整部署手册
@@ -53,6 +60,23 @@ npm run dev               # 前端 5173，接口 3001，/api 自动代理
 npm run build
 npm start                 # 打开 http://localhost:3001
 ```
+
+## 立绘资源包
+
+人物卡片、详情页、名册、选秀、出行和召见都会优先显示立绘；点开人物大图或房间大图可以全屏查看。图片只保存在你自己的服务器，不会上传到第三方。
+
+两种导入方式：
+
+1. **网页内导入（推荐）**：进入「更多 · 立绘库」→「导入整图」，选一张多格拼图，按行列切分并预览，确认后入库；之后可以给人物单张分配，或一键「自动分配」。
+2. **本地脚本**：`python scripts/slice_portrait_sheets.py "data/立绘全图" --rows 2 --cols 5`（需要 Pillow）。脚本会把切片写入 `data/portraits/` 并更新 `index.json`，重复执行会跳过已导入的格子。
+
+说明：
+
+- 切图在浏览器里用 canvas 完成，服务端只负责存文件，不需要 sharp / ImageMagick。
+- 图片存放在 `data/portraits/`，索引是 `data/portraits/index.json`；`data/` 已在 `.gitignore` 里。
+- 分配关系按存档存在 KV（`portrait_assignments`），不写进引擎数值；换设备也还在。
+- 没手动分配时，会按人物 id 稳定预览一张同性立绘；点立绘卡片左下角可以改性别，女性角色（包括君主）需要「女」或「通用」立绘。
+- 备份时把 `data/portraits/` 一起带走，或直接备份整个 `data/`。
 
 ## 部署到云服务器
 
@@ -103,11 +127,12 @@ docker compose up -d --build
 
 ### 存档
 
-存档是普通 JSON，宿主机的 `./data/kv.json`；AI 配置是 `./data/llm-profiles.json`。
+存档是普通 JSON，宿主机的 `./data/kv.json`；AI 配置是 `./data/llm-profiles.json`；立绘在 `./data/portraits/`。
 
 ```bash
 cp data/kv.json ~/backup/kv-$(date +%F).json   # 备份存档
 cp data/llm-profiles.json ~/backup/llm-$(date +%F).json  # 备份接口配置（含密钥）
+cp -r data/portraits ~/backup/portraits-$(date +%F)      # 备份立绘资源包
 ```
 
 换服务器时把 `data/` 整个拷过去即可。文件损坏会自动改名为 `*.corrupt.<时间戳>.json` 并保留原文件。

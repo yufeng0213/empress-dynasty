@@ -9,6 +9,7 @@ import {
   startChatSession,
 } from '../game-core/empire/index.js'
 import { generateChatReply } from '../game/llm.js'
+import { displayPortraitFor, loadPortraitLibrary } from '../game/portraitStore.js'
 
 const props = defineProps({
   run: { type: Object, required: true },
@@ -68,6 +69,8 @@ const roleClass = (contact) => {
   if (contact?.role === 'servant') return 'avatar-inner'
   return ''
 }
+
+const portraitOf = (contact) => displayPortraitFor(workingRun.value?.id, contact)
 
 const MODE_LABELS = {
   chat: '闲谈',
@@ -228,6 +231,7 @@ const switchMode = (next) => {
 }
 
 onMounted(() => {
+  void loadPortraitLibrary()
   if (props.initialCharacterId) {
     selectContact(
       props.initialCharacterId,
@@ -277,7 +281,10 @@ onMounted(() => {
             class="contact"
             @click="selectContact(contact.id, 'chat')"
           >
-            <div class="avatar avatar-sm" :class="roleClass(contact)">{{ contact.name.slice(0, 1) }}</div>
+            <div class="avatar avatar-portrait" :class="roleClass(contact)">
+              <img v-if="portraitOf(contact)" :src="portraitOf(contact)" alt="" loading="lazy" />
+              <template v-else>{{ contact.name.slice(0, 1) }}</template>
+            </div>
             <div class="contact-main">
               <div class="contact-name">
                 {{ contact.name }}
@@ -300,7 +307,10 @@ onMounted(() => {
             @click="selectContact(contact.id, 'chat')"
           >
             <div class="duty-head">
-              <div class="avatar avatar-sm" :class="roleClass(contact)">{{ contact.name.slice(0, 1) }}</div>
+              <div class="avatar avatar-portrait" :class="roleClass(contact)">
+              <img v-if="portraitOf(contact)" :src="portraitOf(contact)" alt="" loading="lazy" />
+              <template v-else>{{ contact.name.slice(0, 1) }}</template>
+            </div>
               <div>
                 <div class="contact-name">{{ contact.name }}</div>
                 <div class="contact-meta">{{ contact.office }}</div>
@@ -319,7 +329,10 @@ onMounted(() => {
     <template v-else-if="active">
       <header class="chat-head">
         <button type="button" class="icon-btn" aria-label="返回" @click="back">‹</button>
-        <div class="avatar avatar-sm" :class="roleClass(active)">{{ active.name.slice(0, 1) }}</div>
+        <div class="avatar avatar-portrait" :class="roleClass(active)">
+          <img v-if="portraitOf(active)" :src="portraitOf(active)" alt="" loading="lazy" />
+          <template v-else>{{ active.name.slice(0, 1) }}</template>
+        </div>
         <div class="chat-head-main">
           <h1>{{ active.name }}</h1>
           <p>{{ active.office }} · {{ active.attitude }} · {{ MODE_LABELS[mode] }}</p>
@@ -356,7 +369,13 @@ onMounted(() => {
           :class="{ 'is-me': msg.from === 'me' }"
         >
           <div class="avatar avatar-sm" :class="roleClass(active)">
-            {{ msg.from === 'me' ? '帝' : active.name.slice(0, 1) }}
+            <img
+              v-if="msg.from !== 'me' && portraitOf(active)"
+              :src="portraitOf(active)"
+              alt=""
+              loading="lazy"
+            />
+            <template v-else>{{ msg.from === 'me' ? '帝' : active.name.slice(0, 1) }}</template>
           </div>
           <div class="msg-body">
             <div class="bubble">{{ msg.text }}</div>
@@ -400,7 +419,10 @@ onMounted(() => {
           <button type="button" class="icon-btn" @click="detailOpen = false">×</button>
         </div>
         <div class="detail-person">
-          <div class="avatar" :class="roleClass(active)">{{ active.name.slice(0, 1) }}</div>
+          <div class="avatar" :class="roleClass(active)">
+            <img v-if="portraitOf(active)" :src="portraitOf(active)" alt="" loading="lazy" />
+            <template v-else>{{ active.name.slice(0, 1) }}</template>
+          </div>
           <div>
             <div class="contact-name">{{ active.office }} · {{ active.factionName || active.roleLabel }}</div>
             <div class="contact-meta">{{ active.attitude }}</div>
@@ -438,7 +460,10 @@ onMounted(() => {
             class="contact"
             @click="selectContact(contact.id, mode === 'letter' ? 'letter' : (mode === 'audience' ? 'audience' : 'chat'))"
           >
-            <div class="avatar avatar-sm" :class="roleClass(contact)">{{ contact.name.slice(0, 1) }}</div>
+            <div class="avatar avatar-portrait" :class="roleClass(contact)">
+              <img v-if="portraitOf(contact)" :src="portraitOf(contact)" alt="" loading="lazy" />
+              <template v-else>{{ contact.name.slice(0, 1) }}</template>
+            </div>
             <div class="contact-main">
               <div class="contact-name">{{ contact.name }}</div>
               <div class="contact-meta">{{ contact.office }} · {{ contact.attitude }}</div>
