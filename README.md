@@ -29,6 +29,7 @@
 │  └─ store.js            # 存档原子写
 ├─ Dockerfile
 ├─ docker-compose.yml
+├─ DEPLOY.md              # 完整部署手册
 └─ .env.example
 ```
 
@@ -63,6 +64,8 @@ docker compose up -d --build
 ```
 
 浏览器访问 `http://服务器IP:3001`。
+
+> `git clone` 报 `Connection was reset` 是 GitHub 443 被拦，改用 SSH 地址或本地打包上传，见 [DEPLOY.md 第 2 节](./DEPLOY.md#拉不下来怎么办)。
 
 ### 环境变量
 

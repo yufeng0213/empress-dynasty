@@ -57,6 +57,37 @@ git clone https://github.com/yufeng0213/empress-dynasty.git
 cd empress-dynasty
 ```
 
+### 拉不下来怎么办
+
+国内服务器直连 GitHub 经常出现 `Connection was reset`（443 被重置）。三种绕法，任选其一。
+
+**方式一：改用 SSH**（服务器 22 端口通常能通）
+
+```bash
+git clone git@github.com:yufeng0213/empress-dynasty.git
+```
+
+服务器上还没有公钥的话，先 `ssh-keygen -t ed25519 -C "server"`，把 `~/.ssh/id_ed25519.pub` 的内容加到 GitHub 的 Settings → SSH and GPG keys。
+
+**方式二：本地打包上传**（最稳，不依赖服务器的网络）
+
+```bash
+# 在你自己的电脑上，仓库的上一级目录
+tar --exclude=node_modules --exclude=dist --exclude=data -czf empress-dynasty.tar.gz empress-dynasty
+scp empress-dynasty.tar.gz root@服务器IP:/opt/
+
+# 服务器上
+cd /opt && tar -xzf empress-dynasty.tar.gz && cd empress-dynasty
+```
+
+**方式三：仓库是私有的话**，clone 时要带 token：
+
+```bash
+git clone https://<你的token>@github.com/yufeng0213/empress-dynasty.git
+```
+
+这种方式 token 会留在 `.git/config` 里，服务器只有自己用问题不大；介意的话还是用方式一。
+
 ---
 
 ## 3. 配置环境变量
