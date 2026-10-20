@@ -301,6 +301,56 @@ certbot 会自动配置好 443 和 HTTP 跳转。
 
 > `proxy_read_timeout` 一定要调大。Nginx 默认 60 秒，遇到长剧情生成会返回 504，看起来就像 AI 挂了。
 
+### 7.4 挂在子路径下：`https://你的域名/empress-dynasty/`
+
+不想单独占一个域名、想和别的项目共用时，可以挂在子路径。前端已经做了自适应（资源走相对路径、接口带上当前前缀），**同一个镜像既能挂根路径也能挂子路径，不需要重新打包**。
+
+唯一要做的是让反向代理**剥掉前缀**再转发。
+
+**Nginx**
+
+```nginx
+# 不带末尾斜杠时补一个，否则相对资源路径会解析错
+location = /empress-dynasty {
+    return 301 /empress-dynasty/;
+}
+
+location /empress-dynasty/ {
+    # 注意 proxy_pass 结尾这个 / ，它负责把 /empress-dynasty 前缀去掉
+    proxy_pass http://127.0.0.1:3001/;
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_read_timeout 180s;
+    proxy_send_timeout 180s;
+}
+```
+
+**Caddy**
+
+```
+example.com {
+    redir /empress-dynasty /empress-dynasty/ 301
+
+    handle_path /empress-dynasty/* {
+        reverse_proxy 127.0.0.1:3001
+    }
+}
+```
+
+`handle_path` 自带剥离前缀的效果，不用额外处理。
+
+**两个容易踩的点**
+
+1. `proxy_pass http://127.0.0.1:3001/;` 末尾少了 `/` —— 后端会收到 `/empress-dynasty/api/kv`，直接 404。这是子路径部署最常见的失败原因。
+2. 访问 `https://域名/empress-dynasty`（不带末尾斜杠）时，浏览器会以 `/` 为基准解析相对资源，页面白屏。上面那条 301 就是解决它的，别省。
+
+`docker-compose.yml` 里的端口保持 `"127.0.0.1:3001:3001"` 即可，公网只暴露 80/443。
+
 ---
 
 ## 8. 存档备份

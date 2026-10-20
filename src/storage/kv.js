@@ -4,7 +4,10 @@
  * 因此业务层不需要任何改动。
  */
 
-const API_BASE = '/api/kv'
+// 用相对的 API 路径：挂在域名根目录时是 /api/kv，
+// 挂在 /empress-dynasty/ 这类子路径时自动变成 ./api/kv。
+const BASE_URL = import.meta.env.BASE_URL || '/'
+const API_BASE = `${BASE_URL}api/kv`.replace(/\/{2,}/g, '/')
 const PREFIX = 'avg_llm_'
 
 // 读取缓存，避免同一回合内重复请求

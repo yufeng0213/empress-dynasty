@@ -65,7 +65,9 @@ docker compose up -d --build
 
 浏览器访问 `http://服务器IP:3001`。
 
-> 默认监听 3001，所以地址带端口。想用域名直接访问（`https://dynasty.example.com` 这种不带端口的），需要映射 80 或加反向代理，见 [DEPLOY.md 第 7 节](./DEPLOY.md#7-配域名和-https建议)。
+> 默认监听 3001，所以地址带端口。想用域名访问，需要映射 80 或加反向代理，见 [DEPLOY.md 第 7 节](./DEPLOY.md#7-配域名和-https建议)。
+>
+> 支持三种挂法：根路径 `https://dynasty.example.com`、子路径 `https://example.com/empress-dynasty/`、或直接 IP+端口。前端资源与接口都用相对路径，同一个镜像不用重新打包。
 
 > `git clone` 报 `Connection was reset` 是 GitHub 443 被拦，改用 SSH 地址或本地打包上传，见 [DEPLOY.md 第 2 节](./DEPLOY.md#拉不下来怎么办)。
 

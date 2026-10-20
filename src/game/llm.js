@@ -10,6 +10,10 @@
 const BATCH_SIZE = 6
 const MAX_BIO_LENGTH = 220
 
+// 与存储层保持一致：子路径部署时请求落到 ./api/chat
+const BASE_URL = import.meta.env.BASE_URL || '/'
+const CHAT_ENDPOINT = `${BASE_URL}api/chat`.replace(/\/{2,}/g, '/')
+
 /**
  * 调用后端代理
  * @returns {Promise<{success:boolean, data:string, error:string}>}
@@ -26,7 +30,7 @@ const callApi = async ({
   const timer = setTimeout(() => controller.abort(), timeout)
 
   try {
-    const response = await fetch('/api/chat', {
+    const response = await fetch(CHAT_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
